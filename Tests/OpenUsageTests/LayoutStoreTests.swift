@@ -692,28 +692,27 @@ final class LayoutStoreTests: XCTestCase {
         // Claude's core meters keep Fable directly below Weekly; optional Sonnet and spend-history
         // rows go below the caret.
         XCTAssertEqual(primaryByProvider["claude"], [
-            "claude.session", "claude.weekly", "claude.fable", "claude.extra", "claude.trend"
+            "claude.session", "claude.weekly", "claude.fable", "claude.extra"
         ])
         XCTAssertEqual(expandedByProvider["claude"], [
-            "claude.sonnet", "claude.rateLimitResets", "claude.today", "claude.yesterday", "claude.last30"
+            "claude.sonnet", "claude.rateLimitResets", "claude.trend", "claude.today", "claude.yesterday", "claude.last30"
         ])
-        XCTAssertEqual(primaryByProvider["codex"], ["codex.session", "codex.weekly", "codex.trend"])
+        XCTAssertEqual(primaryByProvider["codex"], ["codex.session", "codex.weekly"])
         // Spark (the optional model-specific limits) leads the On Demand section, before credits.
         XCTAssertEqual(expandedByProvider["codex"], [
             "codex.spark", "codex.sparkWeekly",
-            "codex.credits", "codex.rateLimitResets", "codex.today", "codex.yesterday", "codex.last30"
+            "codex.credits", "codex.rateLimitResets", "codex.trend", "codex.today", "codex.yesterday", "codex.last30"
         ])
         XCTAssertEqual(primaryByProvider["devin"], ["devin.daily", "devin.weekly"])
         XCTAssertEqual(expandedByProvider["devin"], ["devin.extra"])
-        XCTAssertEqual(primaryByProvider["grok"], ["grok.weekly", "grok.trend"])
+        XCTAssertEqual(primaryByProvider["grok"], ["grok.weekly"])
         XCTAssertEqual(expandedByProvider["grok"], [
-            "grok.payAsYouGo", "grok.today", "grok.yesterday", "grok.last30"
+            "grok.payAsYouGo", "grok.trend", "grok.today", "grok.yesterday", "grok.last30"
         ])
-        // Cursor spend tiles + usage trend are enabled: the trend joins the primary rows, and the
-        // today/yesterday/last30 rows sit below the caret alongside the other secondary metrics.
-        XCTAssertEqual(primaryByProvider["cursor"], ["cursor.usage", "cursor.auto", "cursor.api", "cursor.trend"])
+        // Cursor trend and spend tiles sit below the caret alongside the secondary metrics.
+        XCTAssertEqual(primaryByProvider["cursor"], ["cursor.usage", "cursor.auto", "cursor.api"])
         XCTAssertEqual(expandedByProvider["cursor"], [
-            "cursor.grokBot", "cursor.onDemand", "cursor.requests", "cursor.credits",
+            "cursor.grokBot", "cursor.onDemand", "cursor.requests", "cursor.credits", "cursor.trend",
             "cursor.today", "cursor.yesterday", "cursor.last30"
         ])
     }

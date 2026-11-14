@@ -53,7 +53,7 @@ struct DashboardContentView: View {
 
     @ViewBuilder
     private var widgetContent: some View {
-        // The cross-provider Total Spend ring stays visible whenever the user allows it and an enabled
+        // The cross-provider usage summary stays visible whenever the user allows it and an enabled
         // provider can track spend, even before fresh data arrives or when every metric row is hidden.
         if showTotalSpend, layout.hasSpendCapableProvider {
             TotalSpendCard()

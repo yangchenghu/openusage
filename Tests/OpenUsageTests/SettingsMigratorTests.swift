@@ -362,6 +362,44 @@ final class SettingsMigratorTests: XCTestCase {
         XCTAssertEqual(pinsAfterFirst, ["antigravity.geminiPro", "copilot.premium", "ghost.metric"])
     }
 
+    // MARK: - v4: trends move on demand once
+
+    func testV4MovesTrendsOnDemandWithoutChangingEnabledRowsOrOtherPlacement() throws {
+        let (defaults, domain) = makeDefaults("V4Trends")
+        defer { defaults.removePersistentDomain(forName: domain) }
+        defaults.set(3, forKey: SettingsMigrator.schemaVersionKey)
+        let placed = ["claude.session", "claude.trend", "codex@work.trend"].map { PlacedWidget(descriptorID: $0) }
+        let data = try JSONEncoder().encode(placed)
+        defaults.set(data, forKey: "openusage.layout.v1")
+        // Disabled trends also start on demand when enabled later.
+        defaults.set(try JSONEncoder().encode(["cursor": ["cursor.usage", "cursor.trend"]]),
+                     forKey: "openusage.layout.v1.metricOrderByProvider")
+        defaults.set(["claude.today", "claude.trend"], forKey: "openusage.layout.v1.expandedMetrics")
+        defaults.set(["claude"], forKey: "openusage.layout.v1.expandedProviders")
+        defaults.set(false, forKey: TotalSpendSetting.key)
+
+        SettingsMigrator.migrate(defaults: defaults, domainName: domain)
+
+        XCTAssertEqual(defaults.stringArray(forKey: "openusage.layout.v1.expandedMetrics"),
+                       ["claude.today", "claude.trend", "codex@work.trend", "cursor.trend"])
+        XCTAssertEqual(defaults.data(forKey: "openusage.layout.v1"), data)
+        XCTAssertEqual(defaults.stringArray(forKey: "openusage.layout.v1.expandedProviders"), ["claude"])
+        XCTAssertFalse(defaults.bool(forKey: TotalSpendSetting.key))
+
+        // An explicit choice made after the upgrade survives every later launch.
+        defaults.set(["claude.today"], forKey: "openusage.layout.v1.expandedMetrics")
+        SettingsMigrator.migrate(defaults: defaults, domainName: domain)
+        XCTAssertEqual(defaults.stringArray(forKey: "openusage.layout.v1.expandedMetrics"), ["claude.today"])
+    }
+
+    func testV4DoesNotSeedPlacementWithoutAnExistingLayout() {
+        let (defaults, domain) = makeDefaults("V4NoLayout")
+        defer { defaults.removePersistentDomain(forName: domain) }
+        defaults.set(3, forKey: SettingsMigrator.schemaVersionKey)
+        SettingsMigrator.migrate(defaults: defaults, domainName: domain)
+        XCTAssertNil(defaults.object(forKey: "openusage.layout.v1.expandedMetrics"))
+    }
+
     // MARK: - Schema integrity
 
     /// Guards against editing the migration list without bumping `current` (or vice versa): every

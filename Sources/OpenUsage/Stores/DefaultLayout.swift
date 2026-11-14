@@ -1,7 +1,7 @@
 import Foundation
 
-/// Metrics enabled on first launch. Core quota meters and trends stay visible above the fold, while
-/// balances, reset details, and spend-history rows are enabled but tucked behind each provider's caret.
+/// Metrics enabled on first launch. Core quota meters stay visible above the fold, while
+/// trends, balances, reset details, and spend-history rows are enabled but tucked behind each provider's caret.
 /// `LayoutStore` filters this to whatever the active registry actually knows, so registries that don't
 /// define an ID (e.g. the test fixtures) silently ignore it. The provider-section order isn't seeded
 /// here: an empty saved order reconciles to plain registry order in `LayoutStore`.
@@ -93,16 +93,17 @@ enum DefaultLayout {
     /// membership, not enablement: optional disabled rows like Sonnet or Cursor Requests/Credits are
     /// listed here so if the user enables them later they appear below the caret by default.
     /// Filtered to the active registry by `LayoutStore`, and only seeded on a genuinely fresh launch
-    /// (existing layouts keep everything always-shown unless they reset customization).
+    /// (the v4 settings migration separately moves existing trends on demand once).
     static let expandedMetricIDs: [String] = [
-        // Antigravity: the Gemini pool pair, Argon Weekly, and usage trend stay above the fold;
+        "antigravity.trend", "claude.trend", "codex.trend", "cursor.trend", "grok.trend", "opencode.trend",
+        // Antigravity: the Gemini pool pair and Argon Weekly stay above the fold;
         // the non-Gemini pool pair and spend-history rows sit below the caret.
         "antigravity.claude", "antigravity.claudeWeekly",
         "antigravity.today", "antigravity.yesterday", "antigravity.last30",
-        // Claude's core meters (Session, Weekly, Fable, Extra, Usage Trend) stay above the fold;
+        // Claude's core meters (Session, Weekly, Fable, Extra) stay above the fold;
         // optional Sonnet, reset grants, and spend-history rows sit below the caret.
         "claude.sonnet", "claude.rateLimitResets", "claude.today", "claude.yesterday", "claude.last30",
-        // Codex's core Session/Weekly meters and Usage Trend stay above the fold; Spark (the optional
+        // Codex's core Session/Weekly meters stay above the fold; Spark (the optional
         // model-specific limits), credits, reset details, and spend rows sit below the caret.
         "codex.spark", "codex.sparkWeekly",
         "codex.credits", "codex.rateLimitResets", "codex.today", "codex.yesterday", "codex.last30",
@@ -117,8 +118,7 @@ enum DefaultLayout {
         "grok.payAsYouGo", "grok.today", "grok.yesterday", "grok.last30",
         // Ollama: the plan meters stay above the fold; purchased credits sit below the caret.
         "ollama.purchasedCredits",
-        // OpenCode: the three Go caps (Session/Weekly/Monthly) and Usage Trend stay above the fold —
-        // matching every other provider — with the spend tiles (Today/Yesterday/Last 30 Days) below.
+        // OpenCode: the three Go caps stay above the fold; trend and spend tiles sit below.
         "opencode.today", "opencode.yesterday", "opencode.last30",
         // OpenRouter: Credits meter + Balance stay above the fold; period spend and the per-key cap
         // sit below the caret.

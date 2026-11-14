@@ -1,8 +1,7 @@
 import XCTest
 @testable import OpenUsage
 
-/// Covers the Total Spend card's aggregation and metric projection: which providers contribute,
-/// how slices rank per metric, Cost/MTok math, and when the combined number counts as estimated.
+/// Summary aggregation preserves provider order, tracks missing values, and marks local estimates.
 final class TotalSpendAggregatorTests: XCTestCase {
     private let claude = Provider(id: "claude", displayName: "Claude", icon: .providerMark("claude"))
     private let codex = Provider(id: "codex", displayName: "Codex", icon: .providerMark("codex"))
@@ -33,6 +32,40 @@ final class TotalSpendAggregatorTests: XCTestCase {
         return .values(label: label, values: values)
     }
 
+    func testSummaryKeepsProviderOrderAndBothQuantities() {
+        let snapshots = [
+            "claude": snapshot(claude, lines: [spendLine("Today", dollars: 2, tokens: 9_000_000)]),
+            "cursor": snapshot(cursor, lines: [spendLine("Today", dollars: 20, tokens: 100_000)])
+        ]
+        let total = TotalSpendAggregator.total(for: .today, providers: [claude, cursor], snapshots: snapshots)
+        XCTAssertEqual(total.slices.map(\.provider.id), ["claude", "cursor"])
+        XCTAssertEqual(total.slices[0].amountUSD, 2)
+        XCTAssertEqual(total.slices[0].tokenCount, 9_000_000)
+        XCTAssertEqual(total.totalUSD, 22)
+        XCTAssertEqual(total.totalTokens, 9_100_000)
+    }
+
+    func testSummaryDistinguishesMissingValuesFromKnownZero() {
+        let snapshots = [
+            "claude": snapshot(claude, lines: [spendLine("Today", dollars: nil, tokens: 1_000)]),
+            "codex": snapshot(codex, lines: [spendLine("Today", dollars: 0, tokens: 2_000)]),
+            "cursor": snapshot(cursor, lines: [spendLine("Today", dollars: 2, tokens: nil)])
+        ]
+        let total = TotalSpendAggregator.total(for: .today, providers: [claude, codex, cursor], snapshots: snapshots)
+        XCTAssertFalse(total.slices[0].hasCostData)
+        XCTAssertTrue(total.slices[0].hasTokenData)
+        XCTAssertTrue(total.slices[1].hasCostData)
+        XCTAssertEqual(total.slices[1].amountUSD, 0)
+        XCTAssertFalse(total.slices[2].hasTokenData)
+    }
+
+    func testDefaultTrendsAreEnabledOnDemandAndNeverPinned() {
+        let trends = DefaultLayout.metricIDs.filter { $0.hasSuffix(".trend") }
+        XCTAssertFalse(trends.isEmpty)
+        XCTAssertTrue(Set(trends).isSubset(of: Set(DefaultLayout.expandedMetricIDs)))
+        XCTAssertTrue(Set(trends).isDisjoint(with: DefaultLayout.pinnedMetricIDs))
+    }
+
     func testSumsDollarsAndTokensAcrossProviders() {
         let snapshots = [
             "claude": snapshot(claude, lines: [spendLine("Today", dollars: 2.50, tokens: 100_000, estimated: true)]),
@@ -44,10 +77,6 @@ final class TotalSpendAggregatorTests: XCTestCase {
         XCTAssertEqual(Set(total.slices.map(\.provider.id)), Set(["cursor", "claude"]))
         XCTAssertEqual(total.totalUSD, 9.75, accuracy: 0.0001)
         XCTAssertEqual(total.totalTokens, 600_000, accuracy: 0.0001)
-
-        let spend = total.projection(for: .cost)
-        XCTAssertEqual(spend.slices.map(\.provider.id), ["cursor", "claude"])
-        XCTAssertEqual(spend.centerValue, 9.75, accuracy: 0.0001)
     }
 
     func testProviderWithoutPeriodLineIsExcludedNotZero() {
@@ -62,7 +91,7 @@ final class TotalSpendAggregatorTests: XCTestCase {
         XCTAssertEqual(total.slices.map(\.provider.id), ["claude"])
     }
 
-    func testTokensOnlyLineContributesTokensButNotSpendOrCostPerMtok() {
+    func testTokensOnlyLineContributesTokens() {
         let tokensOnly = spendLine("Today", dollars: nil, tokens: 500_000)
         let snapshots = ["claude": snapshot(claude, lines: [tokensOnly])]
 
@@ -71,24 +100,16 @@ final class TotalSpendAggregatorTests: XCTestCase {
         XCTAssertFalse(total.isEmpty)
         XCTAssertEqual(total.slices.first?.tokenCount, 500_000)
         XCTAssertEqual(total.slices.first?.amountUSD, 0)
-
-        XCTAssertTrue(total.projection(for: .cost).isEmpty)
-        XCTAssertTrue(total.projection(for: .costPerMtok).isEmpty)
-
-        let tokens = total.projection(for: .tokens)
-        XCTAssertEqual(tokens.slices.map(\.provider.id), ["claude"])
-        XCTAssertEqual(tokens.centerValue, 500_000, accuracy: 0.0001)
     }
 
-    func testDollarsOnlyLineContributesSpendButNotCostPerMtok() {
+    func testDollarsOnlyLineContributesSpend() {
         let dollarsOnly = spendLine("Today", dollars: 4.00, tokens: nil)
         let snapshots = ["claude": snapshot(claude, lines: [dollarsOnly])]
 
         let total = TotalSpendAggregator.total(for: .today, providers: [claude], snapshots: snapshots)
 
-        XCTAssertEqual(total.projection(for: .cost).centerValue, 4.00, accuracy: 0.0001)
-        XCTAssertTrue(total.projection(for: .tokens).isEmpty)
-        XCTAssertTrue(total.projection(for: .costPerMtok).isEmpty)
+        XCTAssertEqual(total.totalUSD, 4)
+        XCTAssertEqual(total.totalTokens, 0)
     }
 
     func testTotalIsEstimatedWhenAnySliceIsEstimated() {
@@ -100,61 +121,10 @@ final class TotalSpendAggregatorTests: XCTestCase {
         let total = TotalSpendAggregator.total(for: .today, providers: [claude, cursor], snapshots: snapshots)
 
         XCTAssertTrue(total.isEstimated)
-        XCTAssertTrue(total.projection(for: .cost).isEstimated)
-        XCTAssertTrue(total.projection(for: .costPerMtok).isEstimated)
-        XCTAssertFalse(total.projection(for: .tokens).isEstimated)
     }
 
-    func testCostPerMtokRanksByRateAndBlendsTotals() {
-        // Claude: $10 / 1M tokens = $10/MTok
-        // Cursor: $30 / 1M tokens = $30/MTok — ranks first by rate
-        let snapshots = [
-            "claude": snapshot(claude, lines: [spendLine("Today", dollars: 10, tokens: 1_000_000)]),
-            "cursor": snapshot(cursor, lines: [spendLine("Today", dollars: 30, tokens: 1_000_000)])
-        ]
-
-        let total = TotalSpendAggregator.total(for: .today, providers: [claude, cursor], snapshots: snapshots)
-        let rates = total.projection(for: .costPerMtok)
-
-        XCTAssertEqual(rates.slices.map(\.provider.id), ["cursor", "claude"])
-        XCTAssertEqual(rates.slices[0].displayAmount, 30, accuracy: 0.0001)
-        XCTAssertEqual(rates.slices[1].displayAmount, 10, accuracy: 0.0001)
-        // Blended center: ($40 / 2M) * 1e6 = $20/MTok
-        XCTAssertEqual(rates.centerValue, 20, accuracy: 0.0001)
-    }
-
-    func testCostPerMtokExcludesIncompleteProvidersFromBlend() {
-        let snapshots = [
-            "claude": snapshot(claude, lines: [spendLine("Today", dollars: 10, tokens: 1_000_000)]),
-            "codex": snapshot(codex, lines: [spendLine("Today", dollars: nil, tokens: 9_000_000)]),
-            "cursor": snapshot(cursor, lines: [spendLine("Today", dollars: 5, tokens: nil)])
-        ]
-
-        let total = TotalSpendAggregator.total(for: .today, providers: [claude, codex, cursor], snapshots: snapshots)
-        let rates = total.projection(for: .costPerMtok)
-
-        XCTAssertEqual(rates.slices.map(\.provider.id), ["claude"])
-        XCTAssertEqual(rates.centerValue, 10, accuracy: 0.0001)
-    }
-
-    func testTokensProjectionRanksByTokenCount() {
-        let snapshots = [
-            "claude": snapshot(claude, lines: [spendLine("Today", dollars: 50, tokens: 100_000)]),
-            "cursor": snapshot(cursor, lines: [spendLine("Today", dollars: 1, tokens: 900_000)])
-        ]
-
-        let total = TotalSpendAggregator.total(for: .today, providers: [claude, cursor], snapshots: snapshots)
-        let tokens = total.projection(for: .tokens)
-
-        XCTAssertEqual(tokens.slices.map(\.provider.id), ["cursor", "claude"])
-        XCTAssertEqual(tokens.centerValue, 1_000_000, accuracy: 0.0001)
-    }
-
-    func testEmptyProjectionWhenNothingQualifies() {
+    func testEmptySummaryWhenNothingQualifies() {
         let total = TotalSpendAggregator.total(for: .today, providers: [claude], snapshots: [:])
         XCTAssertTrue(total.isEmpty)
-        XCTAssertTrue(total.projection(for: .cost).isEmpty)
-        XCTAssertTrue(total.projection(for: .tokens).isEmpty)
-        XCTAssertTrue(total.projection(for: .costPerMtok).isEmpty)
     }
 }

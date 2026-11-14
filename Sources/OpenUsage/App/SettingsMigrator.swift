@@ -18,7 +18,7 @@ struct SettingsMigration: Sendable {
 enum SettingsSchema {
     /// Current schema version. Keep equal to the highest migration `version` below (or the baseline when
     /// there are none). This is NOT the app version — bump it only alongside a migration you add.
-    static let current = 3
+    static let current = 4
 
     /// The provider IDs that existed when the v2 migration shipped, frozen forever. A migration is a
     /// point-in-time transform: any future build with more providers also contains this migration, so a
@@ -70,6 +70,22 @@ enum SettingsSchema {
             remapJSONMetricIDArray(defaults, key: "openusage.layout.v1.seededDefaults")
             remapJSONMetricOrder(defaults, key: "openusage.layout.v1.metricOrderByProvider")
             remapJSONPlacedWidgets(defaults, key: "openusage.layout.v1")
+        },
+        // v4 moves existing Usage Trend rows below the caret once, alongside the new summary list.
+        // Enablement, ordering, pins, and each provider's saved open/closed state remain intact.
+        SettingsMigration(version: 4) { defaults in
+            guard let data = defaults.data(forKey: "openusage.layout.v1") else { return }
+            let placed = try JSONDecoder().decode([PlacedWidget].self, from: data)
+            var metricIDs = placed.map(\.descriptorID)
+            if let orderData = defaults.data(forKey: "openusage.layout.v1.metricOrderByProvider") {
+                let order = try JSONDecoder().decode([String: [String]].self, from: orderData)
+                metricIDs.append(contentsOf: order.values.flatMap { $0 })
+            }
+            let trends = Set(metricIDs.filter { $0.hasSuffix(".trend") })
+            guard !trends.isEmpty else { return }
+            let key = "openusage.layout.v1.expandedMetrics"
+            let saved = defaults.stringArray(forKey: key) ?? []
+            defaults.set(saved + trends.subtracting(saved).sorted(), forKey: key)
         }
     ]
 

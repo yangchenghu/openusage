@@ -1,24 +1,15 @@
 import SwiftUI
 
-/// The branded, off-screen PNG for the Total Spend card's share action — the aggregate counterpart to
-/// `ShareCardView`. Static: the metric title and period are baked into the header (no menus in an
-/// image), and the body reuses `TotalSpendRingContent` so the exported ring and legend are exactly
-/// what the popover shows. Same authored width, opaque tray background, forced appearance, and
-/// watermark footer as the per-provider card, so shared images read as one family.
+/// The summary export reuses the live provider list and totals, with the selected period in its header.
 struct TotalSpendShareCardView: View {
     let total: TotalSpend
-    let metric: TotalSpendMetric
     let appearance: ColorScheme
-
-    private var projection: TotalSpendProjection {
-        total.projection(for: metric)
-    }
 
     var body: some View {
         ShareCardChrome(appearance: appearance) {
             headerRow
             DashboardMetricCard {
-                TotalSpendRingContent(projection: projection)
+                TotalSpendListContent(total: total)
                     .padding(.horizontal, 14)
                     .padding(.vertical, 10)
             }
@@ -27,7 +18,7 @@ struct TotalSpendShareCardView: View {
 
     private var headerRow: some View {
         HStack(alignment: .firstTextBaseline, spacing: 6) {
-            Text(metric.title)
+            Text("Usage Summary")
                 .font(.system(size: 15, weight: .semibold))
                 .foregroundStyle(.primary)
             Text(total.period.rawValue)

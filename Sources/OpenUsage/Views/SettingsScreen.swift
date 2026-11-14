@@ -95,7 +95,7 @@ struct SettingsScreen: View {
         section("General") {
             // The dashboard's cross-provider Total Spend card; at least one enabled spend-capable
             // provider must exist, so this toggle can't conjure it up alone.
-            row("Show Total Spend") {
+            row("Show Usage Summary") {
                 Toggle("", isOn: $showTotalSpend)
                     .settingsSwitchStyle()
             }

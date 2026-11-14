@@ -18,15 +18,20 @@ When you expand a card, the tucked-away metrics open below the line as a single-
 
 A provider card can also show **quick-link buttons** pinned at the bottom of its expanded section — Status, Console, Dashboard, and the like — that open the provider's own pages in your default browser. They're part of the expander, so collapsing the caret hides them along with the tucked-away metrics. The caret sits below the links. Buttons lay out up to three across, wrapping to a second row when there are more.
 
-## Total Spend
+## Usage Summary
 
-When any enabled provider tracks daily spend (Claude, Codex, Cursor, Grok, or OpenCode), a card sits above the provider sections. The title is a pull-down menu for **Cost**, **Cost/MTok**, or **Tokens** (Cost is the default; the choice sticks across restarts). A capsule switcher flips the period between **Today**, **Yesterday**, and **30 Days**. The ring, center total, and ranked legend follow the selected metric:
+When an enabled provider tracks daily spend, **Usage Summary** appears above the provider sections.
+Choose **Today**, **Yesterday**, or **30 Days** to see each provider's cost and token count together,
+plus combined totals. The selected period sticks across restarts. Providers follow the dashboard's
+order, including separate accounts, rather than ranking by usage.
 
-- **Cost** — each segment is that provider's share of combined dollars (biggest spender first).
-- **Cost/MTok** — each segment is sized by that provider's dollars-per-million-tokens rate; the center is the blended rate across providers that have both spend and tokens; the legend lists each provider's own rate.
-- **Tokens** — each segment is that provider's share of combined tokens.
+Only enabled providers with spend tracking contribute, even if their own spend rows are hidden in
+Customize. Providers without usage in the selected period are omitted. Missing cost or token data
+shows **—**; estimated costs carry **~**. A period without data shows an empty message.
+The share icon or **Share Screenshot** context menu copies the same summary as a branded PNG.
 
-The ring center is always two short lines — a compact number on top and a quiet unit underneath (`$533` / `dollars`, `12.4` / `million`, or `$1.37` / `MTok`) — so Cost/MTok and big totals stay readable in the hole. Cost modes keep the `$` on the number. Hover the center for the exact one-line figure (and a note when any contributor's dollars are a local estimate — Cost and Cost/MTok only). Each provider keeps a fixed color drawn from its brand (Claude's terracotta, OpenAI's green, and so on), and even a tiny share keeps a visible sliver of the ring. Providers with nothing for the selected metric simply don't appear — they're never counted as zero. (An enabled provider counts even if you've hidden its own spend rows in Customize; other dollar rows, like OpenRouter's API spend, never mix in.) The header's share icon (or right-clicking the card) copies a branded PNG of the ring to your clipboard, just like sharing a provider card. The header also carries a small ⓘ naming the providers that feed the total. A period with nothing to show for the active metric shows a quiet empty state instead of hiding the card. Don't want the card at all? Turn it off with **Show Total Spend** at the top of [Settings](settings.md).
+Turn **Show Usage Summary** off at the top of [Settings](settings.md) to hide this entire section.
+It defaults on, and keeps the value of the former **Show Total Spend** preference when upgrading.
 
 ## Rows
 
@@ -45,7 +50,7 @@ The ring center is always two short lines — a compact number on top and a quie
 
 For Claude, Codex, Cursor, Grok, and OpenCode spend rows, the value gently highlights when you point at it, signaling it's interactive; hovering it for a moment opens a small model breakdown for that period: a ranked list of models, each showing its name and spend on one line, its share percentage and tokens on the next, and a thin share bar. Cursor groups its per-thinking-effort model names (like `claude-opus-4-8-thinking-max`) under the base model. Long tails fold into **Other** — anything past the top named models or under 5% of the period. Models no pricing source can price don't appear here (or in the row's totals) at all; the row's warning triangle names them instead (see [Pricing](pricing.md)).
 
-**Usage Trend** (Claude, Codex, Cursor, Grok, and OpenCode) is a small bar chart of the last 30 days of token usage — one bar per day, drawn from the same source as that provider's spend rows (local logs for Claude, Codex, Grok, and OpenCode; Cursor's usage history for Cursor). **Hover it** for the peak day, the date range, and the source. It's on by default; turn it off or reorder it from Customize like any other metric. It can't be starred for the menu bar — the strip shows single values, not a chart.
+**Usage Trend** (Claude, Codex, Cursor, Grok, and OpenCode) is a small bar chart of the last 30 days of token usage — one bar per day, drawn from the same source as that provider's spend rows (local logs for Claude, Codex, Grok, and OpenCode; Cursor's usage history for Cursor). **Hover it** for the peak day, the date range, and the source. It is enabled by default in the card's **On Demand** section; expand the card to see it, or move it to **Always Visible** in Customize. It can't be starred for the menu bar — the strip shows single values, not a chart.
 
 With [iCloud Sync](icloud-sync.md) on, the machine-local providers' spend rows, trends, warnings, and
 model breakdowns are rebuilt from all synced Macs. Cursor stays unchanged because its usage history is
@@ -81,7 +86,7 @@ A provider's **detail** has a back button and provider-specific Reset control in
 
 Drag-reorder also works directly on the dashboard — drag a row within its provider, drag it across the caret boundary while the card is open, or drag a provider header to reorder sections. On a Force Touch trackpad you'll feel a light tap each time the dragged item snaps into a new slot.
 
-The default reset layout keeps each provider's core quota meters and Usage Trend always visible, then tucks balances, reset details, and spend-history rows on demand. Optional detail rows like Claude Sonnet and Cursor Requests/Credits stay off by default, but start on demand if you enable them.
+The default reset layout keeps each provider's core quota meters always visible, then tucks Usage Trend, balances, reset details, and spend-history rows on demand. Upgrading to the summary list moves existing Usage Trend rows on demand once; later placement choices and each card's saved open/closed state are kept. Optional detail rows like Claude Sonnet and Cursor Requests/Credits stay off by default, but start on demand if you enable them.
 
 Made a change you didn't mean to? Press **⌘Z** to undo — it works anywhere in the popover (the dashboard and Customize alike) and steps back through your recent customization changes one at a time: hiding or showing a metric, reordering metrics or whole providers, starring or unstarring, and moving a metric across the divider all undo. Each step restores the exact previous arrangement. Undo is per-session (it starts fresh after a relaunch), and resetting clears it.
 
