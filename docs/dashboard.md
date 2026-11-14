@@ -87,6 +87,10 @@ Made a change you didn't mean to? Press **⌘Z** to undo — it works anywhere i
 
 When OpenUsage ships a new default metric, existing layouts get it once. If you turn it off, it stays off. A provider's **Reset** button (top right of its detail) restores that provider's default metrics, order, menu-bar stars, and which metrics start on demand, but leaves other providers and the provider order untouched. The **Reset All Customization** button (top right of the provider list) does the same for every provider at once, restores the default provider order, and re-detects your installed tools — turning providers back on for exactly the tools set up on your Mac, using the same local check as the welcome screen (see [Which Providers Are On](provider-enablement.md)). It asks for confirmation first, since it wipes the whole layout and re-detects providers, and can't be undone.
 
+Cursor's Customize list row uses login/logout instead of an enablement switch. Login enables it
+after authorization succeeds, and logout removes its OpenUsage authorization and disables it. Its
+detail page contains metric customization only. Other providers keep their existing switches.
+
 ## Keyboard
 
 | Key | Action |

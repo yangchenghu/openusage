@@ -28,11 +28,6 @@ struct CustomizeProviderDetailView: View {
     var body: some View {
         if let group = layout.customizeDetail(for: providerID) {
             VStack(alignment: .leading, spacing: density.sectionSpacing) {
-                if providerID == "cursor",
-                   let cursor = container.providers.first(where: { $0.provider.id == "cursor" }) as? CursorProvider,
-                   let session = cursor.accountSession {
-                    CursorSignInSection(session: session)
-                }
                 metricSections(group)
                     .simultaneousGesture(metricDragGesture())
                 if let keyProvider = container.apiKeyProviders.first(where: { $0.provider.id == providerID }) {

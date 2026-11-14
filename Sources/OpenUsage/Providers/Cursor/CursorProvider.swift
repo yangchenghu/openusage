@@ -69,7 +69,7 @@ final class CursorProvider: ProviderRuntime {
 
     func hasLocalCredentials() async -> Bool {
         do {
-            if try await accountSession?.loadAuthState() != nil { return true }
+            if let accountSession { return try await accountSession.loadAuthState() != nil }
             return await loadOffMainActor { [authStore] in authStore.loadAuthState() } != nil
         } catch {
             AppLog.error(LogTag.auth("cursor"), "could not read OpenUsage's saved sign-in during detection")
@@ -81,8 +81,8 @@ final class CursorProvider: ProviderRuntime {
         var revision = accountSession?.revision
         do {
             let state: CursorAuthState?
-            if let owned = try await accountSession?.loadAuthState() {
-                state = owned
+            if let accountSession {
+                state = try await accountSession.loadAuthState()
             } else {
                 state = await loadOffMainActor { [authStore] in authStore.loadAuthState() }
             }

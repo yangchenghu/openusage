@@ -22,11 +22,11 @@ enum CursorAuthError: Error, LocalizedError, Equatable {
     var errorDescription: String? {
         switch self {
         case .notLoggedIn:
-            return "Not logged in. Open Customize → Cursor and choose Sign In."
+            return "Not logged in. Open Customize and choose login beside Cursor."
         case .sessionExpired:
-            return "Session expired. Open Customize → Cursor and sign in again."
+            return "Session expired. Open Customize, logout of Cursor, then login again."
         case .tokenExpired:
-            return "Token expired. Open Customize → Cursor and sign in again."
+            return "Token expired. Open Customize, logout of Cursor, then login again."
         }
     }
 }

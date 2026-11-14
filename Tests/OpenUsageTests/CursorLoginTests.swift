@@ -181,15 +181,82 @@ final class CursorAccountSessionTests: XCTestCase {
         XCTAssertFalse(detected)
     }
 
-    func testRemovingOwnedLoginReturnsToTheLocalCredentialSource() async throws {
+    func testLogoutRemovesOwnedCredentials() async throws {
         let vault = MemoryCursorVault(CursorAccount(accessToken: makeCursorJWT(), refreshToken: "r"))
         let session = CursorAccountSession(vault: vault)
         _ = try await session.loadAuthState()
-        try await session.useCursorAppLogin()
+        try await session.signOut()
         let state = try await session.loadAuthState()
         let saved = try await vault.load()
         XCTAssertNil(state)
         XCTAssertNil(saved)
+    }
+
+    func testRestoredLoginAndLogoutUpdateProviderEnablement() async throws {
+        for signedIn in [false, true] {
+            let suite = "OpenUsageTests.CursorEnablement.\(UUID().uuidString)"
+            let defaults = UserDefaults(suiteName: suite)!
+            defer { defaults.removePersistentDomain(forName: suite) }
+            let enablement = ProviderEnablementStore(defaults: defaults)
+            enablement.setEnabled(!signedIn, for: "cursor")
+            let account = signedIn ? CursorAccount(accessToken: makeCursorJWT(), refreshToken: "r") : nil
+            let session = CursorAccountSession(vault: MemoryCursorVault(account))
+            session.onAuthenticationChanged = { enablement.setEnabled($0, for: "cursor") }
+            _ = try await session.loadAuthState()
+            XCTAssertEqual(enablement.isEnabled("cursor"), signedIn)
+            if signedIn {
+                try await session.signOut()
+                XCTAssertFalse(enablement.isEnabled("cursor"))
+                XCTAssertNil(session.account)
+            }
+            XCTAssertFalse(ProviderEnablementStore(defaults: defaults).isEnabled("cursor"))
+        }
+    }
+
+    func testOnlySuccessfulLoginEnablesCursor() async throws {
+        for status in [200, 401] {
+            let suite = "OpenUsageTests.CursorLoginEnablement.\(UUID().uuidString)"
+            let defaults = UserDefaults(suiteName: suite)!
+            defer { defaults.removePersistentDomain(forName: suite) }
+            let enablement = ProviderEnablementStore(defaults: defaults)
+            let session = CursorAccountSession(vault: MemoryCursorVault(), login: CursorLogin(http: loginHTTP(token: makeCursorJWT(), usageStatus: status)))
+            session.onAuthenticationChanged = { enablement.setEnabled($0, for: "cursor") }
+            _ = try await session.loadAuthState()
+            let task = session.startSignIn(openBrowser: { _ in true }, onComplete: {})
+            await task?.value
+            XCTAssertEqual(enablement.isEnabled("cursor"), status == 200)
+        }
+    }
+
+    func testFailedLogoutKeepsTheAccountAndProviderEnabled() async throws {
+        let previous = CursorAccount(accessToken: makeCursorJWT(), refreshToken: "r")
+        let vault = MemoryCursorVault(previous)
+        let session = CursorAccountSession(vault: vault)
+        var enabled = false
+        session.onAuthenticationChanged = { enabled = $0 }
+        _ = try await session.loadAuthState()
+        await vault.setDeleteFailure(true)
+        do { try await session.signOut(); XCTFail("Expected Keychain failure") }
+        catch { XCTAssertEqual((error as? CursorLoginError)?.errorDescription, CursorLoginError.keychain.errorDescription) }
+        XCTAssertTrue(enabled)
+        XCTAssertEqual(session.account, previous)
+    }
+
+    func testLoggedOutCursorIsNotReenabledFromLocalTokensOrResetFallback() async {
+        let session = CursorAccountSession(vault: MemoryCursorVault())
+        let http = RoutingHTTPClient { _ in XCTFail("Logged-out Cursor must not use another local login"); return usageResponse() }
+        let provider = makeProvider(session: session, http: http,
+            sqlite: KeyValueSQLite(values: [CursorAuthStore.accessTokenKey: makeCursorJWT(sub: "auth0|local")]))
+        let detected = await provider.hasLocalCredentials()
+        XCTAssertFalse(detected)
+        let snapshot = await provider.refresh()
+        XCTAssertEqual(snapshot.errorCategory, .notLoggedIn)
+        let suite = "OpenUsageTests.CursorResetEnablement.\(UUID().uuidString)"
+        let defaults = UserDefaults(suiteName: suite)!
+        defer { defaults.removePersistentDomain(forName: suite) }
+        let enablement = ProviderEnablementStore(defaults: defaults)
+        await FirstRunSeeder.reseed(providers: [provider], enablement: enablement).value
+        XCTAssertFalse(enablement.isEnabled("cursor"))
     }
 
     func testRejectedOwnedLoginDoesNotFallBackToAnotherCursorAppAccount() async {
@@ -269,12 +336,14 @@ private actor MemoryCursorVault: CursorAccountVault {
     var account: CursorAccount?
     var failLoad = false
     var failSave = false
+    var failDelete = false
     init(_ account: CursorAccount? = nil) { self.account = account }
     func load() throws -> CursorAccount? { if failLoad { throw CursorLoginError.keychain }; return account }
     func save(_ account: CursorAccount) throws { if failSave { throw CursorLoginError.keychain }; self.account = account }
-    func delete() { account = nil }
+    func delete() throws { if failDelete { throw CursorLoginError.keychain }; account = nil }
     func setLoadFailure(_ fail: Bool) { failLoad = fail }
     func setSaveFailure(_ fail: Bool) { failSave = fail }
+    func setDeleteFailure(_ fail: Bool) { failDelete = fail }
 }
 
 private func tokenResponse(_ token: String) -> HTTPResponse {

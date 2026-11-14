@@ -41,7 +41,9 @@ enum FirstRunSeeder {
         providers: [ProviderRuntime],
         enablement: ProviderEnablementStore
     ) -> Task<Void, Never> {
-        let fallback = fallbackProviderIDs.intersection(Set(providers.map(\.provider.id)))
+        // Cursor's list action now requires explicit login; Reset All must not bypass it.
+        let fallbackEligible = providers.filter { !(($0 as? CursorProvider)?.accountSession != nil) }
+        let fallback = fallbackProviderIDs.intersection(Set(fallbackEligible.map(\.provider.id)))
         enablement.seedEnabledProviders(fallback)
         AppLog.info(.config, "reset all: seeded providers \(fallback.sorted()); re-probing local credentials")
         return Task {

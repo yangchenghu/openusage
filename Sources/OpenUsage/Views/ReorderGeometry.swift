@@ -136,7 +136,12 @@ struct ReorderLiftPreview: View {
             provider: provider,
             isEnabled: isEnabled,
             metricCount: metricCount,
-            handle: { $0 }
+            handle: { $0 },
+            trailingControl: provider.id == "cursor" ? AnyView(
+                Button(isEnabled ? "logout" : "login") {}
+                    .buttonStyle(.bordered)
+                    .controlSize(.small)
+            ) : nil
         )
         .liftedRowSurface()
     }

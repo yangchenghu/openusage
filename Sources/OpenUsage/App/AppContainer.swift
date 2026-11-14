@@ -197,6 +197,19 @@ final class AppContainer {
         // effectively always is. Notification authorization is requested the first time a trigger is
         // turned on in Settings, not at launch — triggers default off. No-op under tests.
         AppNotifications.shared.registerAsDelegate()
+        if let cursor = providers.first(where: { $0.provider.id == "cursor" }) as? CursorProvider,
+           let session = cursor.accountSession {
+            session.onAuthenticationChanged = { [weak enablement] signedIn in
+                enablement?.setEnabled(signedIn, for: "cursor")
+            }
+            do {
+                _ = try await session.loadAuthState()
+                enablement.setEnabled(session.account != nil, for: "cursor")
+            } catch {
+                enablement.setEnabled(false, for: "cursor")
+                AppLog.error(LogTag.auth("cursor"), "could not restore Cursor sign-in; keeping the provider off")
+            }
+        }
     }
 
     deinit {

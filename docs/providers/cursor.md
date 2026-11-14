@@ -1,6 +1,6 @@
 # Cursor
 
-Tracks your Cursor plan usage with a browser sign-in or the login from the Cursor app.
+Tracks your Cursor plan usage with an OpenUsage browser sign-in.
 
 ## What it tracks
 
@@ -22,7 +22,7 @@ Without a dollar limit or usable model pools, Team/Enterprise accounts use the r
 
 When Cursor reports your plan name, OpenUsage shows it beside the provider name.
 Enterprise/team seats sometimes still return `GetPlanInfo.planName = Pro`; OpenUsage prefers the
-billing membership from Cursor's local state (`stripeMembershipType`) or `usage-summary` when that
+billing membership from `usage-summary` when that
 membership is `enterprise` / `team` and GetPlanInfo is missing or still says Pro.
 
 Enterprise/team seats that already return usable model-pool percentages from the primary usage API
@@ -35,28 +35,28 @@ into the Grok CLI is not required.
 
 ## Where credentials come from
 
-Open **Customize → Cursor → Account → Sign In…** to authorize OpenUsage in your browser, using the
+Open **Customize** and click **login** beside Cursor to authorize OpenUsage in your browser, using the
 same sign-in flow as main. Finish authorization within five minutes. You can close the menu panel
-while waiting; reopen Customize → Cursor to see the result or cancel. After a successful sign-in,
-Cursor is enabled and its usage refreshes automatically.
+while waiting; reopen Customize to see its status or cancel. After a successful sign-in, the button
+changes to **logout**, Cursor is enabled, and its usage refreshes automatically. The Cursor detail
+continues to manage metrics; it no longer has an Account section or a separate enablement toggle.
 
-The authorized account takes priority over Cursor's local login. Its credentials are saved in
+The authorized account's credentials are saved in
 OpenUsage's own macOS Keychain item, separately for development and release builds. OpenUsage
 checks the new account with a usage request before saving it. Its JWT renews up to a week before
 expiry; Cursor's new access JWT becomes the next refresh token when no separate one is returned.
 If saving a renewal fails, OpenUsage keeps it in memory, shows a warning, and retries saving later.
 
-With no OpenUsage browser account, the original behavior remains: OpenUsage reads Cursor's local
-state database and Keychain entries. **Use Cursor App Login** removes only OpenUsage's saved account
-and returns to that source. Browser sign-in never modifies Cursor's database or Keychain items.
-Changing the selected login clears the previous account's displayed snapshot and history cache.
+Click **logout** beside Cursor to delete OpenUsage's saved authorization and turn Cursor off. A
+failed Keychain deletion keeps the account and provider on and shows an error. Logout clears the
+previous account's displayed snapshot and history cache. With no OpenUsage login, Cursor stays off,
+including after restarting or resetting customization; it does not use the Cursor app's local login.
+Browser login and logout never modify Cursor's database or Keychain items.
 
 For browser accounts, billing membership is read from `usage-summary` once an hour; it does not
 inherit another account's local `stripeMembershipType`.
 
-When a local session has no separate refresh token, OpenUsage can renew using its access JWT,
-as Cursor's browser/CLI login does. A stored refresh token still takes priority. A failed renewal
-is logged, and the existing access token is tried before showing a login error.
+A failed renewal is logged, and the existing access token is tried before showing a login error.
 
 Extra Usage keeps each budget's spend and remaining allowance together: a personal cap uses personal
 spend, and a shared team cap uses team spend. Missing remaining allowance does not imply the cap is
@@ -74,7 +74,8 @@ loads history too. It does not require enabling a hidden widget to see the inclu
 
 ## Troubleshooting
 
-- **"Not logged in" / token errors** — open Customize → Cursor and choose Sign In… or Sign In Again….
+- **"Not logged in" / token errors** — open Customize and click login beside Cursor. If an expired
+  account still shows logout, log out first, then log in again.
 - **Browser sign-in failed** — retry; the previous saved account remains available. A Keychain access
   failure is shown explicitly and does not switch silently to a different local account.
 - **Some metrics missing** — Cursor omits fields depending on plan type; missing metrics simply show "No data".

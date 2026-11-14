@@ -11,6 +11,7 @@ final class CursorAccountSession {
     private(set) var errorMessage: String?
     private(set) var persistenceWarning: String?
     private(set) var revision = 0
+    @ObservationIgnored var onAuthenticationChanged: (@MainActor (Bool) -> Void)?
     @ObservationIgnored private var loaded = false
     @ObservationIgnored private var loadTask: Task<CursorAccount?, Error>?
     @ObservationIgnored private var loginTask: Task<Void, Never>?
@@ -33,7 +34,11 @@ final class CursorAccountSession {
             loadTask = task
             defer { loadTask = nil }
             let saved = try await task.value
-            if revision == expectedRevision { account = saved; loaded = true }
+            if revision == expectedRevision {
+                account = saved
+                loaded = true
+                onAuthenticationChanged?(saved != nil)
+            }
         }
         if needsPersistence, let account { await persistRenewal(account) }
         return account?.authState
@@ -82,6 +87,7 @@ final class CursorAccountSession {
                 membership = nil
                 persistenceWarning = nil
                 needsPersistence = false
+                onAuthenticationChanged?(true)
                 await onComplete()
             } catch is CancellationError {
                 // Cancellation leaves the previously saved login in place.
@@ -99,7 +105,7 @@ final class CursorAccountSession {
         loginTask?.cancel()
     }
 
-    func useCursorAppLogin() async throws {
+    func signOut() async throws {
         revision += 1
         try await vault.delete()
         account = nil
@@ -110,6 +116,7 @@ final class CursorAccountSession {
         errorMessage = nil
         persistenceWarning = nil
         needsPersistence = false
+        onAuthenticationChanged?(false)
     }
 
     func renew(_ state: CursorAuthState, client: CursorUsageClient) async throws -> String {

@@ -2,7 +2,7 @@ import SwiftUI
 
 /// The Customize provider list (L1): every known provider as a row, in the user's saved order —
 /// including disabled ones (greyed), so the user can re-enable them or open their detail. Each row
-/// carries an on/off toggle, a metric-count label, and a chevron into the provider's detail (L2).
+/// carries an on/off toggle (Cursor uses login/logout), a metric-count label, and a detail chevron.
 /// Enabled providers drag-reorder by the leading grip; tapping a row opens
 /// L2 (`layout.customizeProviderID = id`).
 struct CustomizeProviderListView: View {
@@ -52,11 +52,17 @@ struct CustomizeProviderListView: View {
                     grip
                 }
             },
+            trailingControl: cursorSession(for: row).map { AnyView(CursorAccountControl(session: $0)) },
             onToggle: { container.enablement.setEnabled($0, for: row.id) },
             onOpen: { withAnimation(Motion.spring) { layout.customizeProviderID = row.id } }
         )
         .opacity(activeProviderID == row.id ? 0 : 1)
         .reorderFrame(id: row.id, in: .named(reorderSpaceName))
+    }
+
+    private func cursorSession(for row: ProviderRow) -> CursorAccountSession? {
+        guard row.id == "cursor" else { return nil }
+        return (container.providers.first { $0.provider.id == row.id } as? CursorProvider)?.accountSession
     }
 
     private func providerDragGesture(for row: ProviderRow) -> some Gesture {

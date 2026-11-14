@@ -23,12 +23,14 @@ This check happens **once per provider**. After that, the provider is yours to m
 
 ## Your choices always stick
 
-An explicit browser sign-in from Customize → Cursor turns Cursor on and refreshes it after the
-authorization succeeds. Its saved OpenUsage Keychain credentials also count in local detection.
+Cursor uses login/logout beside its name in Customize instead of a toggle. Successful browser login
+turns Cursor on and refreshes it; logout removes OpenUsage's authorization and turns Cursor off.
+The saved authorization determines its state again on launch. Without it, Cursor stays off even if
+the Cursor app is signed in, and Reset All does not include it in the no-credentials fallback.
 
 Everything you set in Customize — providers on or off, metric layout, menu-bar stars — carries across updates untouched. The only thing an update may ever change is turning **on** a provider you have never seen before, and only when you actually have that tool installed.
 
-The one exception is deliberate: the **Reset All Customization** button at the top of the Customize provider list. Because you asked for a clean slate, it re-runs the same local credential detection as the welcome screen and switches the enabled set back to exactly the providers with credentials available on your Mac (Claude/Codex/Cursor if none are found) — so it can turn a provider off even if you had it on, or back on if you had turned it off. It also asks for confirmation first. See [Dashboard](dashboard.md) for the metric side of that reset.
+The one exception is deliberate: the **Reset All Customization** button at the top of the Customize provider list. Because you asked for a clean slate, it re-runs the same local credential detection as the welcome screen and switches the enabled set back to exactly the providers with credentials available on your Mac (Claude/Codex if none are found) — so it can turn a provider off even if you had it on, or back on if you had turned it off. Cursor still requires its OpenUsage authorization. It also asks for confirmation first. See [Dashboard](dashboard.md) for the metric side of that reset.
 
 ## How it works (for the curious)
 
