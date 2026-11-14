@@ -1144,14 +1144,14 @@ final class LayoutStoreTests: XCTestCase {
     // MARK: - Customize master/detail (L1 list + L2 detail)
 
     func testCustomizeProviderRowsIncludesAllProvidersRegardlessOfEnablement() {
-        // Disable Codex; L1 must still list it (greyed), in the registry's provider order.
+        // Disable Codex; L1 must still list it (greyed), after the enabled providers.
         let store = LayoutStore(
             registry: .mock,
             defaults: makeDefaults("RowsIncludeDisabled"),
             storageKey: "layout",
             isProviderEnabled: { id in id != "codex" }
         )
-        XCTAssertEqual(store.customizeProviderRows.map(\.id), MockData.providers.map(\.id))
+        XCTAssertEqual(store.customizeProviderRows.map(\.id), ["claude", "cursor", "codex"])
         let codex = store.customizeProviderRows.first { $0.id == "codex" }
         XCTAssertNotNil(codex, "disabled provider stays visible in L1")
         XCTAssertFalse(codex?.isEnabled ?? true, "disabled provider row reports isEnabled false")

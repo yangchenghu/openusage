@@ -1,7 +1,7 @@
 import SwiftUI
 
-/// The Customize provider list (L1): every known provider as a row, in the user's saved order —
-/// including disabled ones (greyed), so the user can re-enable them or open their detail. Each row
+/// The Customize provider list (L1): enabled providers first, then disabled ones (greyed), keeping
+/// the user's saved order within each group so reorderable rows stay together. Each row
 /// carries an on/off toggle (Cursor uses login/logout), a metric-count label, and a detail chevron.
 /// Enabled providers drag-reorder by the leading grip; tapping a row opens
 /// L2 (`layout.customizeProviderID = id`).

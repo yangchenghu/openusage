@@ -88,18 +88,18 @@ extension LayoutStore {
         }
     }
 
-    /// The L1 Customize list: every known provider in the user's saved order, regardless of enablement.
-    /// Disabled providers appear here (greyed in the UI) so the user can re-enable them or open their
-    /// detail — unlike the enabled-provider reorder list exposed by `customizeGroups`, which filters them
-    /// out. Each row carries the enablement flag and total metric count shown by the list.
+    /// The L1 Customize list: enabled providers first, then disabled providers, preserving the saved
+    /// order within each group. This keeps the draggable providers together and matches the enabled
+    /// reorder targets. Grouping is display-only; toggling a provider does not overwrite its saved order.
     var customizeProviderRows: [ProviderRow] {
-        orderedProviders().map { provider in
+        let rows = orderedProviders().map { provider in
             ProviderRow(
                 provider: provider,
                 isEnabled: isProviderEnabled(provider.id),
                 metricCount: metricCount(for: provider.id)
             )
         }
+        return rows.filter(\.isEnabled) + rows.filter { !$0.isEnabled }
     }
 
     /// Total metrics a provider supports — the L1 row's badge number. Registry descriptor count,
