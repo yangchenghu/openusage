@@ -14,6 +14,7 @@ struct CursorUsageClient: Sendable {
     static let restUsageURL = URL(string: "https://cursor.com/api/usage")!
     static let usageSummaryURL = URL(string: "https://cursor.com/api/usage-summary")!
     static let stripeURL = URL(string: "https://cursor.com/api/auth/stripe")!
+    static let profileURL = URL(string: "https://cursor.com/api/auth/me")!
     static let usageEventsURL = URL(string: "https://cursor.com/api/dashboard/get-filtered-usage-events")!
     static let clientID = "KbZUR41cY7W6zRSdpSUJ7I7mLYBKOCmB"
 
@@ -85,6 +86,14 @@ struct CursorUsageClient: Sendable {
             url: Self.stripeURL,
             headers: ["Cookie": "WorkosCursorSessionToken=\(session.sessionToken)"],
             timeout: 10
+        ))
+    }
+
+    func fetchProfile(accessToken: String) async throws -> HTTPResponse? {
+        guard let session = Self.session(from: accessToken) else { return nil }
+        return try await http.send(HTTPRequest(
+            method: "GET", url: Self.profileURL,
+            headers: ["Cookie": "WorkosCursorSessionToken=\(session.sessionToken)"], timeout: 10
         ))
     }
 

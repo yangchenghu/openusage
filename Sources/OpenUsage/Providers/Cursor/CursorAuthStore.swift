@@ -4,6 +4,7 @@ struct CursorAuthState: Hashable, Sendable {
     enum Source: Hashable, Sendable {
         case sqlite
         case keychain
+        case openUsage
     }
 
     var accessToken: String?
@@ -21,11 +22,11 @@ enum CursorAuthError: Error, LocalizedError, Equatable {
     var errorDescription: String? {
         switch self {
         case .notLoggedIn:
-            return "Not logged in. Sign in via Cursor app or run `agent login`."
+            return "Not logged in. Open Customize → Cursor and choose Sign In."
         case .sessionExpired:
-            return "Session expired. Sign in via Cursor app or run `agent login`."
+            return "Session expired. Open Customize → Cursor and sign in again."
         case .tokenExpired:
-            return "Token expired. Sign in via Cursor app or run `agent login`."
+            return "Token expired. Open Customize → Cursor and sign in again."
         }
     }
 }
@@ -103,13 +104,14 @@ struct CursorAuthStore: Sendable {
         return nil
     }
 
-    func needsRefresh(_ accessToken: String?) -> Bool {
+    func needsRefresh(_ accessToken: String?, source: CursorAuthState.Source? = nil) -> Bool {
         guard let accessToken,
               let expiresAt = Self.tokenExpiration(accessToken)
         else {
             return true
         }
-        return expiresAt.timeIntervalSince(now()) <= Self.refreshBufferSeconds
+        let lead = source == .openUsage ? 7 * 86_400.0 : Self.refreshBufferSeconds
+        return expiresAt.timeIntervalSince(now()) <= lead
     }
 
     func saveAccessToken(_ accessToken: String, source: CursorAuthState.Source) throws {
@@ -118,6 +120,9 @@ struct CursorAuthStore: Sendable {
             try writeStateValue(Self.accessTokenKey, accessToken)
         case .keychain:
             try keychain.writeGenericPassword(service: Self.keychainAccessTokenService, value: accessToken)
+        case .openUsage:
+            // OpenUsage-owned credentials must be saved through CursorAccountSession.
+            preconditionFailure("Browser credentials cannot be written to Cursor's auth store")
         }
     }
 

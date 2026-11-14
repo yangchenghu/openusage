@@ -31,6 +31,9 @@ OpenUsage never asks for a token — it reads what Antigravity already has:
 - **Antigravity running** — OpenUsage talks to the app's local language server (the richest source, and where the plan name comes from).
 - **App closed** — it falls back to the OAuth token Antigravity / `agy` store in your macOS Keychain and queries Google's Cloud Code API. An expired token is refreshed automatically (OpenUsage never writes back to Antigravity's own keychain item). Its short-lived cache is reused only while the same Keychain login is present and readable.
 
+Cloud quota summaries prefer the daily endpoint, which carries active Gemini usage. Production
+fills missing buckets or handles a failed daily read. Plan and project lookups still prefer production.
+
 If neither is available you'll see *Start Antigravity or run `agy` and try again.*
 
 ## Spend and usage history

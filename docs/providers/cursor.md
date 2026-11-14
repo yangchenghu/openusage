@@ -1,6 +1,6 @@
 # Cursor
 
-Tracks your Cursor plan usage using the login from the Cursor app.
+Tracks your Cursor plan usage with a browser sign-in or the login from the Cursor app.
 
 ## What it tracks
 
@@ -35,15 +35,48 @@ into the Grok CLI is not required.
 
 ## Where credentials come from
 
-Just be signed into the Cursor app. OpenUsage reads Cursor's local state database (and its keychain entries) for the session tokens; refreshed tokens are persisted back. Nothing extra to install or configure.
+Open **Customize → Cursor → Account → Sign In…** to authorize OpenUsage in your browser, using the
+same sign-in flow as main. Finish authorization within five minutes. You can close the menu panel
+while waiting; reopen Customize → Cursor to see the result or cancel. After a successful sign-in,
+Cursor is enabled and its usage refreshes automatically.
+
+The authorized account takes priority over Cursor's local login. Its credentials are saved in
+OpenUsage's own macOS Keychain item, separately for development and release builds. OpenUsage
+checks the new account with a usage request before saving it. Its JWT renews up to a week before
+expiry; Cursor's new access JWT becomes the next refresh token when no separate one is returned.
+If saving a renewal fails, OpenUsage keeps it in memory, shows a warning, and retries saving later.
+
+With no OpenUsage browser account, the original behavior remains: OpenUsage reads Cursor's local
+state database and Keychain entries. **Use Cursor App Login** removes only OpenUsage's saved account
+and returns to that source. Browser sign-in never modifies Cursor's database or Keychain items.
+Changing the selected login clears the previous account's displayed snapshot and history cache.
+
+For browser accounts, billing membership is read from `usage-summary` once an hour; it does not
+inherit another account's local `stripeMembershipType`.
+
+When a local session has no separate refresh token, OpenUsage can renew using its access JWT,
+as Cursor's browser/CLI login does. A stored refresh token still takes priority. A failed renewal
+is logged, and the existing access token is tried before showing a login error.
+
+Extra Usage keeps each budget's spend and remaining allowance together: a personal cap uses personal
+spend, and a shared team cap uses team spend. Missing remaining allowance does not imply the cap is
+fully spent. Bounded Extra Usage resets with the reported billing cycle.
 
 ## Spend history
 
 Today, Yesterday, Last 30 Days, and Usage Trend come from Cursor's usage history—the same data shown on Cursor's Usage page. OpenUsage keeps each day on your Mac, separately for each Cursor account, and re-checks today and yesterday on every refresh. It fills in missing older days in the background within 20 seconds per refresh. A failed or short download never erases stored days. The chart appears once all 30 days are stored; heavy accounts may take a couple of refreshes the first time.
 
+A day with zero events is valid even when Cursor omits the event list. It does not prevent the
+30-day history from completing.
+
+The generic request-count fallback fills both Total Usage and the optional Requests widget, and
+loads history too. It does not require enabling a hidden widget to see the included allowance.
+
 ## Troubleshooting
 
-- **"Not logged in" / token errors** — open Cursor and make sure you're signed in, then refresh.
+- **"Not logged in" / token errors** — open Customize → Cursor and choose Sign In… or Sign In Again….
+- **Browser sign-in failed** — retry; the previous saved account remains available. A Keychain access
+  failure is shown explicitly and does not switch silently to a different local account.
 - **Some metrics missing** — Cursor omits fields depending on plan type; missing metrics simply show "No data".
 - **Optional lookup failed** — Grok Bot, plan, credit-grant, prepaid-balance, and request-fallback failures stay nonfatal when primary usage is available. OpenUsage records fixed, credential-free reasons in the diagnostic log.
 

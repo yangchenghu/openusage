@@ -29,7 +29,7 @@ enum CursorUsageEvents {
         guard let object = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
               let totalCount = integer(object["totalUsageEventsCount"]),
               totalCount >= 0,
-              let rawEvents = object["usageEventsDisplay"] as? [Any]
+              let rawEvents = (object["usageEventsDisplay"] ?? [Any]()) as? [Any]
         else {
             throw CursorUsageEventsError.invalidResponse
         }

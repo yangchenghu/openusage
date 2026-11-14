@@ -423,6 +423,15 @@ final class WidgetDataStore {
         failureRetryAfter[providerID] = nil
     }
 
+    /// An explicitly changed login must not retain another account's last-good usage or history.
+    func providerAccountDidChange(_ providerID: String) {
+        localSnapshots[providerID] = nil
+        providerErrors[providerID] = nil
+        failureRetryAfter[providerID] = nil
+        cache.remove(providerID: providerID)
+        requestSnapshotRebuild()
+    }
+
     /// Rebuild the in-memory union immediately after a provider toggle. Local cached data remains
     /// available to direct API reads, but disabled providers stop receiving peer contributions.
     func providerEnablementDidChange() {

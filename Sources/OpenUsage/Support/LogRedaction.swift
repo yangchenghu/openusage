@@ -34,7 +34,7 @@ enum LogRedaction {
     private static let urlSensitiveParams = [
         "key", "api_key", "apikey", "token", "access_token", "secret", "password",
         "auth", "authorization", "bearer", "credential", "user", "user_id", "userid",
-        "account_id", "accountid", "profilearn", "profile_arn", "email", "login"
+        "account_id", "accountid", "profilearn", "profile_arn", "email", "login", "uuid"
     ]
 
     /// Redact sensitive query parameters in a URL. Only the query string is touched; the path is
@@ -50,6 +50,10 @@ enum LogRedaction {
             let name = String(param[..<eqPos])
             let value = String(param[param.index(after: eqPos)...])
             let nameLower = name.lowercased()
+            // Cursor's login poll sends the PKCE secret in the query, unlike a normal token POST.
+            if ["verifier", "code_verifier"].contains(nameLower), !value.isEmpty {
+                return "\(name)=[REDACTED]"
+            }
             if !value.isEmpty, urlSensitiveParams.contains(where: { nameLower.contains($0) }) {
                 return "\(name)=\(redactValue(value))"
             }

@@ -45,6 +45,11 @@ your macOS account (owner read and write only). Antigravity's short-lived refres
 to the current Keychain login using a one-way fingerprint; the refresh credential itself is not copied.
 The cache is never used after logout, an account change, or while Keychain access is unavailable.
 
+Cursor can also be authorized directly from Customize → Cursor. The browser sign-in uses PKCE and
+saves its access/refresh tokens in OpenUsage's own macOS Keychain item, separately for development
+and release builds. It does not write to the Cursor app's credentials. Choosing Use Cursor App Login
+deletes OpenUsage's item and restores the original local-login source.
+
 Claude Desktop access is strictly read-only. OpenUsage may ask macOS for permission to use the
 `Claude Safe Storage` Keychain item so it can decrypt Desktop's current access token. It never uses
 Desktop's rotating refresh token and never modifies Desktop's config, cookies, or Keychain data.

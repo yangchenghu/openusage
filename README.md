@@ -4,6 +4,54 @@ Track your AI coding subscriptions from the macOS menu bar — native Swift edit
 
 OpenUsage shows how much of your AI coding plans you've used: session and weekly limits, credits, and spend, all in one popover. Pin your most important metrics straight into the menu bar.
 
+## 本分支的背景与目标
+
+本分支基于 **0.7.16**（`release/0.7.16`）维护。维护者更习惯旧版简约的交互：打开面板即可查看用量，状态栏按 Customize 中的顺序显示关注的指标。升级到 0.8.0 后，重新授权登录本身可以接受，但需要切换 Tab 才能看到目标用量，以及不熟悉的状态栏排序，影响了日常查看的便利性，因此选择保留旧版体验并自行编译。
+
+最初需要解决的问题是：**同一个 Cursor 账号在 0.7.16 中无法读取用量，在 0.8.0 中可以读取。** 对比 main 后确认，Cursor 的主用量接口仍然是 `GetCurrentPeriodUsage`，主要区别包括凭证来源、授权续期和部分数据解析。第一轮移植兼容修复后，维护者反馈仍无法获取 Cursor 用量，因此进一步接入 main 的浏览器账号授权方式。
+
+本分支保留 0.7.16 的 Dashboard、指标默认配置和状态栏排序，按需移植用量读取修复；Cursor 增加独立授权入口，其余厂商继续使用原有登录来源。main 已重写账号和历史统计架构，因此没有整体合并新版账号系统、多账号界面或 Tab。
+
+对比基线为 0.7.16 的 `abf472d` 与 2026-11-13 拉取的 main `c6c14f7`；main 的变化不一定都已包含在正式版 0.8.0 中。逐厂商差异、移植来源及暂未移植的功能见[兼容维护记录](docs/research/0.7.16-provider-backports.md)。
+
+**使用本分支请自行构建，见 [Building](#building)。下面的 Homebrew 和上游 Releases 安装方式不会安装这些本地修改。**
+
+## 本分支 Changelog
+
+以下为本地维护改动，尚未发布新的版本号。
+
+### 2026-11-14 — Cursor 独立账号授权
+
+- 移植 main 的 Cursor 浏览器授权协议：使用 PKCE 校验，打开 Cursor 登录页并轮询授权结果，最多等待五分钟。菜单面板收起后仍会继续等待授权。
+- 在 **Customize → Cursor → Account** 增加 **Sign In…**、**Sign In Again…**、取消和重新打开浏览器的入口。
+- 授权成功后，先用新令牌验证用量接口，再保存到 OpenUsage 自己的 macOS Keychain 项目；开发版与正式版的授权分开保存，不修改 Cursor 应用的本机凭证。
+- 独立授权优先于 Cursor 本机登录，支持自动续期。续期令牌保存失败时保留内存中的新令牌、显示提示并重试保存；新登录失败或取消时保留原账号。
+- 从 `usage-summary` 定期读取独立授权账号的 Team/Enterprise 成员类型，避免套用本机另一个账号的套餐信息。
+- 授权完成后自动启用 Cursor 并刷新用量；切换登录来源时清除旧账号的展示缓存。**Use Cursor App Login** 可移除 OpenUsage 的独立授权，恢复原来的本机登录来源。
+- 为授权轮询的 PKCE verifier 和请求标识补充日志脱敏。
+
+### 2026-11-13–14 — 厂商用量兼容修复
+
+- **Cursor：**支持只有访问 JWT、没有独立 refresh token 的本机会话续期；修复个人限额与团队支出混算，并补充 Extra Usage 的账期重置时间。
+- **Cursor：**兼容零用量历史日省略事件列表的响应，避免历史数据始终无法凑齐；通用请求计数备用路径同时填入 Total Usage 和 Requests，并保留历史读取，解决数据只落入默认隐藏指标的问题。
+- **Antigravity：**云端配额摘要优先读取 daily 的活跃计数，由 production 补齐缺失额度；保留原有本机语言服务器优先的流程。
+- **Grok：**按需额度从 cents 换算为 dollars，例如原始 `2500` 显示为 `$25.00 cap`。
+- **Z.ai：**识别 HTTP 200 响应中的业务错误 `401`，明确提示密钥失效。
+
+### 验证情况
+
+- 用量兼容修复阶段：`swift test --filter 'Cursor|Antigravity|Grok|ZAI'`，270 项通过。
+- 独立授权与日志脱敏阶段：`swift test --filter 'Cursor|LogRedaction'`，112 项通过。
+- 开发应用已通过构建、签名检查及启动验证。上述测试使用模拟响应和临时凭证；真实账号能否恢复用量读取，仍需完成浏览器授权后验证，界面点击检查尚未完成。
+
+## Cursor 授权使用方式
+
+1. 构建并启动本分支的应用。
+2. 打开 **Customize → Cursor → Account → Sign In…**。
+3. 在浏览器完成 Cursor 登录和授权；应用会自动保存授权并刷新用量。
+
+无独立授权时仍会读取 Cursor 应用的本机登录。如果授权过期，可在同一位置选择 **Sign In Again…**。更多说明见 [Cursor 文档](docs/providers/cursor.md)。
+
 <p align="center">
   <img src="assets/screenshot.jpg?v=20260706" alt="OpenUsage menu bar tracker showing Claude and Codex session, weekly, and spend usage" width="900">
 </p>
@@ -35,6 +83,8 @@ Either way, the app updates itself in place via signed, notarized [Sparkle](docs
 - **[Z.ai](docs/providers/zai.md)** — session, weekly, web-search quotas (GLM Coding Plan, API key)
 
 Most providers read the credentials already on your machine (keychain, auth files, app state) — no extra login. OpenRouter and Z.ai are the exceptions: they have no local credential to reuse, so you supply an API key (see [OpenRouter setup](docs/providers/openrouter.md) or [Z.ai setup](docs/providers/zai.md)). Credentials are used only for the corresponding provider requests. OpenUsage's separate anonymous summaries and public pricing downloads are documented under [Privacy & usage data](docs/privacy.md).
+
+This branch also supports a separate [Cursor browser sign-in](docs/providers/cursor.md#where-credentials-come-from) under Customize → Cursor → Account. A saved OpenUsage sign-in takes priority over Cursor's local login.
 
 ## Features
 
@@ -76,6 +126,18 @@ swift test             # run the test suite
 ./script/build_and_run.sh   # build and launch the dev app from dist/ (no install)
 ```
 
+本分支可使用以下命令构建并启动 Debug 开发包：
+
+```sh
+CONFIG=debug ./script/build_and_run.sh verify
+```
+
+生成的应用位于 `dist/OpenUsage.app`。脚本会退出运行中的 OpenUsage，重新构建、签名并启动应用。
+
+- 默认开发 bundle id 为 `com.robinebers.openusage.dev`，设置及独立 Cursor 授权与正式版分开保存。
+- 开发包没有 Sparkle 更新源，不会自动升级到新版。
+- 脚本原有的开发版本标签是 `0.7.0-dev`，不代表源码退回 0.7.0；本次没有调整版本号。
+- iCloud Sync 需要匹配的 provisioning profile；本机验证时未配置，因此生成的开发包不支持 iCloud Sync。
 
 
 ## Architecture

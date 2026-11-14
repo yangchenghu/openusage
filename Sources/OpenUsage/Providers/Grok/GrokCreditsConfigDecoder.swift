@@ -9,7 +9,7 @@ struct GrokCreditsConfig: Equatable, Sendable {
     var usedPercent: Double
     var periodStart: Date
     var periodEnd: Date
-    /// Pay-as-you-go cap in credits; 0 when disabled (proto-JSON also omits the field at 0).
+    /// Pay-as-you-go cap in cents; 0 when disabled (proto-JSON also omits the field at 0).
     var onDemandCap: Double
 
     var periodDurationMs: Int {

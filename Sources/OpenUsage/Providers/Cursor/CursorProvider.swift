@@ -13,6 +13,7 @@ final class CursorProvider: ProviderRuntime {
     )
 
     let authStore: CursorAuthStore
+    let accountSession: CursorAccountSession?
     let usageClient: CursorUsageClient
     let now: @Sendable () -> Date
     let pricing: @Sendable () async -> ModelPricing
@@ -21,6 +22,7 @@ final class CursorProvider: ProviderRuntime {
 
     init(
         authStore: CursorAuthStore = CursorAuthStore(),
+        accountSession: CursorAccountSession? = nil,
         usageClient: CursorUsageClient = CursorUsageClient(),
         now: @escaping @Sendable () -> Date = Date.init,
         pricing: @escaping @Sendable () async -> ModelPricing = { await ModelPricingStore.shared.current() },
@@ -28,6 +30,7 @@ final class CursorProvider: ProviderRuntime {
         usageHistoryStore: CursorUsageHistoryStore = CursorUsageHistoryStore()
     ) {
         self.authStore = authStore
+        self.accountSession = accountSession
         self.usageClient = usageClient
         self.now = now
         self.pricing = pricing
@@ -65,18 +68,32 @@ final class CursorProvider: ProviderRuntime {
     }
 
     func hasLocalCredentials() async -> Bool {
-        // Same source as `refresh()`: any auth state (state DB or keychain) counts.
-        await loadOffMainActor { [authStore] in authStore.loadAuthState() } != nil
+        do {
+            if try await accountSession?.loadAuthState() != nil { return true }
+            return await loadOffMainActor { [authStore] in authStore.loadAuthState() } != nil
+        } catch {
+            AppLog.error(LogTag.auth("cursor"), "could not read OpenUsage's saved sign-in during detection")
+            return false
+        }
     }
 
     func refresh() async -> ProviderSnapshot {
-        guard let state = await loadOffMainActor({ [authStore] in authStore.loadAuthState() }) else {
-            return ProviderSnapshot.error(provider: provider, error: CursorAuthError.notLoggedIn)
-        }
-
+        var revision = accountSession?.revision
         do {
-            return try await probe(authState: state)
+            let state: CursorAuthState?
+            if let owned = try await accountSession?.loadAuthState() {
+                state = owned
+            } else {
+                state = await loadOffMainActor { [authStore] in authStore.loadAuthState() }
+            }
+            revision = accountSession?.revision
+            guard let state else { throw CursorAuthError.notLoggedIn }
+            let result = try await probe(authState: state)
+            if revision != accountSession?.revision { return await refresh() }
+            return result
         } catch {
+            if revision != accountSession?.revision { return await refresh() }
+            AppLog.warn(LogTag.plugin("cursor"), "usage refresh failed")
             return ProviderSnapshot.error(provider: provider, error: error)
         }
     }
@@ -85,7 +102,7 @@ final class CursorProvider: ProviderRuntime {
         var authState = initialState
         var accessToken = authState.accessToken?.trimmingCharacters(in: .whitespacesAndNewlines).nilIfEmpty
 
-        if authStore.needsRefresh(accessToken) {
+        if authStore.needsRefresh(accessToken, source: authState.source) {
             do {
                 if let refreshed = try await refreshAccessToken(authState: authState) {
                     authState.accessToken = refreshed
@@ -94,6 +111,7 @@ final class CursorProvider: ProviderRuntime {
                     throw CursorAuthError.notLoggedIn
                 }
             } catch {
+                AppLog.warn(LogTag.auth("cursor"), "token renewal failed; trying the existing access token")
                 if accessToken == nil {
                     throw error
                 }
@@ -115,6 +133,9 @@ final class CursorProvider: ProviderRuntime {
         }
         // The access token may have rotated during the usage fetch's refresh-and-retry; read the live one.
         let currentToken = authState.accessToken ?? accessToken
+        if authState.source == .openUsage {
+            authState.membershipType = await accountSession?.membershipType(client: usageClient, accessToken: currentToken, now: now())
+        }
 
         let (planInfoName, planInfoUnavailable) = await fetchPlanName(accessToken: currentToken)
         let routingPlanName = CursorUsageMapper.routingPlanName(
@@ -149,7 +170,8 @@ final class CursorProvider: ProviderRuntime {
                     unavailableMessage: "Cursor request-based usage data unavailable. Try again later."
                 )
                 await appendGrokBotUsage(to: &mapped.lines, accessToken: currentToken)
-                return snapshot(mapped)
+                let history = await appendSpendLines(to: &mapped.lines, accessToken: currentToken)
+                return snapshot(mapped, usageHistory: history)
             } catch {
                 AppLog.warn(LogTag.plugin("cursor"), "optional request-based usage fallback failed")
             }
@@ -281,64 +303,6 @@ final class CursorProvider: ProviderRuntime {
         return CursorUsageMapper.appendSpendLines(rows: rows, now: currentTime, pricing: pricing, to: &lines)
     }
 
-    private func fetchUsageWithRetry(accessToken: String, authState: inout CursorAuthState) async throws -> HTTPResponse {
-        var working = authState
-        defer { authState = working }
-        return try await ProviderAuthRetry.fetch(
-            token: accessToken,
-            attempt: { try await self.usageClient.fetchUsage(accessToken: $0) },
-            refreshAccessToken: {
-                guard let refreshed = try await self.refreshAccessToken(authState: working) else {
-                    throw CursorAuthError.tokenExpired
-                }
-                working.accessToken = refreshed
-                return refreshed
-            },
-            connectionFailed: CursorUsageError.connectionFailed,
-            retriedConnectionFailed: CursorUsageError.usageAfterRefreshFailed,
-            authExpired: CursorAuthError.tokenExpired
-        )
-    }
-
-    private func refreshAccessToken(authState: CursorAuthState) async throws -> String? {
-        guard let refreshToken = authState.refreshToken?.trimmingCharacters(in: .whitespacesAndNewlines).nilIfEmpty else {
-            return nil
-        }
-
-        let response = try await usageClient.refreshToken(refreshToken)
-        if response.statusCode == 400 || response.statusCode == 401 {
-            let body = ProviderParse.jsonObject(response.body)
-            if body?["shouldLogout"] as? Bool == true {
-                throw CursorAuthError.sessionExpired
-            }
-            throw CursorAuthError.tokenExpired
-        }
-        guard (200..<300).contains(response.statusCode),
-              let body = ProviderParse.jsonObject(response.body)
-        else {
-            return nil
-        }
-        if body["shouldLogout"] as? Bool == true {
-            throw CursorAuthError.sessionExpired
-        }
-        guard let accessToken = (body["access_token"] as? String)?.trimmingCharacters(in: .whitespacesAndNewlines).nilIfEmpty else {
-            return nil
-        }
-        // Fail loudly, but do NOT interpolate the error: the Cursor token is persisted via a SQL
-        // statement that embeds the token, and a sqlite3 failure surfaces as stderr that could echo a
-        // fragment of that statement (JWTs aren't covered by log redaction). A generic error line keeps
-        // it loud without risking a token leak. The refreshed token still works for this session.
-        do {
-            let source = authState.source
-            try await loadOffMainActor { [authStore, accessToken, source] in
-                try authStore.saveAccessToken(accessToken, source: source)
-            }
-        } catch {
-            AppLog.error(LogTag.auth("cursor"), "failed to persist rotated access token to the Cursor state DB; using it for this session only")
-        }
-        return accessToken
-    }
-
     private func fetchPlanName(accessToken: String) async -> (String?, Bool) {
         guard let body = await fetchOptionalJSONObject(label: "plan", request: {
             try await self.usageClient.fetchPlan(accessToken: accessToken)
@@ -430,7 +394,12 @@ final class CursorProvider: ProviderRuntime {
             else {
                 throw CursorUsageError.requestBasedUnavailable(unavailableMessage)
             }
-            return try CursorUsageMapper.mapRequestBasedUsage(body, planName: planName, unavailableMessage: unavailableMessage)
+            return try CursorUsageSummaryMapper.map(
+                summary: nil,
+                requestUsage: body,
+                planName: planName,
+                unavailableMessage: unavailableMessage
+            )
         } catch let error as CursorUsageError {
             throw error
         } catch {
@@ -473,7 +442,8 @@ final class CursorProvider: ProviderRuntime {
             plan: mapped.plan,
             lines: mapped.lines,
             refreshedAt: now(),
-            usageHistory: usageHistory
+            usageHistory: usageHistory,
+            warning: accountSession?.persistenceWarning
         )
     }
 }

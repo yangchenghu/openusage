@@ -44,6 +44,9 @@ enum ZAIUsageMapper {
         guard let root = ProviderParse.jsonObject(body) else {
             throw ZAIUsageError.invalidResponse
         }
+        if root["success"] as? Bool == false, ProviderParse.number(root["code"]) == 401 {
+            throw ZAIAuthError.invalidKey
+        }
         // The limits array lives under `data.limits`; the legacy plugin also tolerated the root object
         // being the container directly (no `data` wrapper), so honor both.
         let container: [String: Any]
