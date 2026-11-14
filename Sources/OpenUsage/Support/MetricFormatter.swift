@@ -52,6 +52,20 @@ enum MetricFormatter {
                 return value.formatted(.number.notation(.compactName).precision(.fractionLength(0...1)).locale(locale))
             }
             return value.formatted(.number.precision(.fractionLength(0...1)).locale(locale))
+        case .price:
+            // Quote-currency prices span from BTC's five figures to sub-cent meme coins, so precision
+            // follows the magnitude: 2 decimals from 1,000, 4 from 1, else 8. The tray drops the cents
+            // on four-figure prices to stay short.
+            let digits: Int
+            switch abs(value) {
+            case 1000...: digits = style == .tray ? 0 : 2
+            case 1...: digits = 4
+            default: digits = 8
+            }
+            return value.formatted(.number.precision(.fractionLength(digits)).grouping(.automatic).locale(locale))
+        case .change:
+            let text = value.formatted(.number.precision(.fractionLength(2)).locale(locale))
+            return (value > 0 ? "+" : "") + text + "%"
         }
     }
 

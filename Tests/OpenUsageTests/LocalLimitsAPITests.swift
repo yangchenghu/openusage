@@ -244,6 +244,8 @@ final class LocalLimitsAPITests: XCTestCase {
             "cursor": ["totalUsage", "grokBot", "autoUsage", "apiUsage", "onDemand", "requests", "credits"],
             "antigravity": ["geminiSession", "geminiWeekly", "argonWeekly", "nonGeminiSession", "nonGeminiWeekly"],
             "copilot": ["premiumCredits", "extraUsage", "orgCredits", "orgSpend", "chat", "completions"],
+            // Market prices are not usage limits, so Crypto Prices exports no limit resources.
+            "crypto": [],
             "devin": ["daily", "weekly", "extraUsageBalance"],
             "grok": ["weekly"],
             "ollama": ["session", "weekly", "monthly", "purchasedCredits"],

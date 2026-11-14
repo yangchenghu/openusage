@@ -8,10 +8,9 @@ What the app does and how it behaves. These pages describe **behavior, not visua
 - [Menu bar](menu-bar.md) — pinning metrics into the menu bar
 - [Settings](settings.md) — every option, what it changes
 - [Refreshing & caching](refreshing.md) — when data updates and what happens when a fetch fails
-- [iCloud Sync](icloud-sync.md) — how spend history is combined across Macs
 - [Model pricing](pricing.md) — how spend tiles price tokens, and where the rates come from
 - [Updates](updates.md) — automatic updates, manual checks, and the beta channel
-- [Privacy & usage data](privacy.md) — daily activity, crash reports, and optional usage analytics
+- [Privacy & usage data](privacy.md) — what leaves your Mac (no analytics or crash reports)
 
 ## Integrations
 
@@ -27,6 +26,7 @@ What each provider tracks, where its credentials come from, and what to do when 
 - [Claude](providers/claude.md)
 - [Codex](providers/codex.md)
 - [Copilot](providers/copilot.md)
+- [Crypto Prices](providers/crypto.md)
 - [Cursor](providers/cursor.md)
 - [Devin](providers/devin.md)
 - [Grok](providers/grok.md)

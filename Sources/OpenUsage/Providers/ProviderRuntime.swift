@@ -37,6 +37,10 @@ protocol ProviderRuntime: AnyObject {
     /// sources `refresh()` reads, and run blocking loads via `loadOffMainActor`.
     func hasLocalCredentials() async -> Bool
 
+    /// How long a successful snapshot stays fresh before the refresh loop fetches this provider again.
+    /// Defaults to the shared `RefreshSetting.interval`; fast-moving sources (market prices) shorten it.
+    var refreshInterval: TimeInterval { get }
+
     /// Hands the provider the snapshot painted from the launch cache, called once at launch and only
     /// when the entry's account stamp matched the card's known identity. Providers whose in-memory
     /// fallback state doesn't survive a relaunch can hold it for their first degraded refresh.
@@ -45,6 +49,8 @@ protocol ProviderRuntime: AnyObject {
 
 extension ProviderRuntime {
     func adoptLaunchSnapshot(_ snapshot: ProviderSnapshot) {}
+
+    var refreshInterval: TimeInterval { RefreshSetting.interval }
 }
 
 /// Run a blocking, `Sendable` credential load off the MainActor.

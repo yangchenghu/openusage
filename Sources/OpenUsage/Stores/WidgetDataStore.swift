@@ -68,11 +68,10 @@ final class WidgetDataStore {
     /// deadline is already reported separately by `slowProviderRefreshThreshold`.
     static let defaultProviderRefreshTimeout: TimeInterval = 120
 
-    /// Rendered snapshots consumed by every UI/API surface. Equal to `localSnapshots` when iCloud sync
-    /// is off; machine-local history rows are rebuilt from the union while sync is on.
+    /// Rendered snapshots consumed by every UI/API surface. Mirrors `localSnapshots`; rebuilds are
+    /// coalesced during a refresh batch.
     var snapshots: [String: ProviderSnapshot] = [:]
-    /// Last-good snapshots produced on this Mac. These alone are cached and exported to iCloud, so a
-    /// peer contribution can never echo back out and multiply on the next device.
+    /// Last-good snapshots produced on this Mac. These are what the snapshot cache persists.
     private(set) var localSnapshots: [String: ProviderSnapshot] = [:]
     var refreshingProviderIDs: Set<String> = []
     /// Wall-clock time the most recent full refresh pass finished. Together with the chosen refresh
@@ -93,14 +92,6 @@ final class WidgetDataStore {
     /// just gathers each pass's enabled bounded metrics and delegates.
     @ObservationIgnored private let notificationEvaluator = QuotaNotificationEvaluator()
 
-    /// Telemetry hook wired by `AppContainer`. Invoked once per *real* provider fetch — `.refreshed` or
-    /// `.failed` only, never the cache-hit/skip/backoff outcomes that the 5-minute timer produces in
-    /// bulk — so the recorder can roll daily usage and error counts up into one event per provider per
-    /// day. `nil` (and so a no-op) in tests and previews. Not observable UI state.
-    @ObservationIgnored var onRefreshOutcome: (@MainActor (String, RefreshOutcome, ErrorCategory?, Bool) -> Void)?
-    /// Wired by `ICloudUsageSyncStore`; debounced there so a concurrent provider batch produces one file.
-    @ObservationIgnored var onLocalHistoryChanged: (@MainActor () -> Void)?
-    @ObservationIgnored private var peerHistoryDocuments: [UsageHistoryDocument] = []
     @ObservationIgnored private var snapshotRebuildDeferrals = 0
     @ObservationIgnored private var pendingSnapshotRebuild = false
     @ObservationIgnored private var coalescedRebuildTask: Task<Void, Never>?
@@ -211,7 +202,7 @@ final class WidgetDataStore {
         AppLog.info(.refresh, "batch start (\(providerIDs.count) providers, force=\(force))")
         snapshotRebuildDeferrals += 1
         let tasks = providerIDs.map { providerID in
-            Task { await self.refresh(providerID: providerID, force: force, notifyHistoryChange: false) }
+            Task { await self.refresh(providerID: providerID, force: force) }
         }
         var outcomes: [RefreshOutcome] = []
         outcomes.reserveCapacity(tasks.count)
@@ -224,10 +215,17 @@ final class WidgetDataStore {
             coalescedRebuildTask = nil
             flushPendingSnapshotWork()
         }
-        // Stamp the end of the pass so the footer countdown targets the next scheduled refresh
-        // (this time + one refresh interval), mirroring the periodic loop that sleeps one interval
-        // after each pass.
-        lastRefreshAt = Date()
+        // Stamp the end of the pass so the footer countdown targets the next scheduled refresh (this
+        // time + one default interval). Fast providers (market prices) refresh many times between
+        // default-cadence passes, so only a pass that actually fetched a default-cadence provider — or
+        // a forced one — moves the countdown; otherwise it would reset every few seconds.
+        let fetchedDefaultCadence = zip(providerIDs, outcomes).contains { providerID, outcome in
+            (outcome == .refreshed || outcome == .failed)
+                && refreshInterval(for: providerID) >= RefreshSetting.interval
+        }
+        if force || fetchedDefaultCadence || lastRefreshAt == nil {
+            lastRefreshAt = Date()
+        }
         let durationMs = durationMilliseconds(since: start)
         // Count THIS batch's actual outcomes, not the long-lived `providerErrors` map (which persists
         // across passes, so reading it would miscount cache hits and stale earlier failures).
@@ -235,7 +233,6 @@ final class WidgetDataStore {
         let failed = outcomes.count { $0 == .failed }
         let cached = outcomes.count { $0 == .cacheHit }
         let backedOff = outcomes.count { $0 == .backedOff }
-        if refreshed > 0 { onLocalHistoryChanged?() }
         AppLog.info(.refresh, "batch end (\(durationMs)ms, \(refreshed) ok / \(failed) failed / \(cached) cached / \(backedOff) backed off)")
     }
 
@@ -295,11 +292,7 @@ final class WidgetDataStore {
     enum RefreshOutcome: Sendable { case refreshed, failed, cacheHit, skipped, backedOff }
 
     @discardableResult
-    func refresh(
-        providerID: String,
-        force: Bool = false,
-        notifyHistoryChange: Bool = true
-    ) async -> RefreshOutcome {
+    func refresh(providerID: String, force: Bool = false) async -> RefreshOutcome {
         guard isProviderEnabled(providerID) else { return .skipped }
         // A TTL-fresh entry that provably belongs to another account (swap since it was written) must
         // not short-circuit the refresh — under persisted freshness (the one-shot CLI) it would copy
@@ -308,7 +301,8 @@ final class WidgetDataStore {
             providerID: providerID,
             currentIdentityKey: providerIdentityKeys[providerID]
         )
-        if !force, !staleAccountStamp, let cached = cache.snapshot(providerID: providerID) {
+        if !force, !staleAccountStamp,
+           let cached = cache.snapshot(providerID: providerID, ttl: refreshInterval(for: providerID)) {
             // Skip the no-op write: `@Observable` doesn't compare values, so unconditionally
             // re-assigning an unchanged snapshot would re-render the menu-bar label every pass.
             AppLog.debug(.refresh, "cache hit \(providerID)")
@@ -347,7 +341,6 @@ final class WidgetDataStore {
             providerErrors[providerID] = "Refresh timed out after \(Int(providerRefreshTimeout))s"
             failureRetryAfter[providerID] = now().addingTimeInterval(Self.failureRetryBackoff)
             AppLog.warn(.refresh, "\(providerID) timed out after \(Int(providerRefreshTimeout))s")
-            onRefreshOutcome?(providerID, .failed, .network, force)
             return .failed
         }
         // A canceled refresh may still return if a provider's underlying work is non-throwing. Never
@@ -370,7 +363,6 @@ final class WidgetDataStore {
             // Negative-cache the failure so a wake burst can't re-probe this provider in a tight loop.
             failureRetryAfter[providerID] = now().addingTimeInterval(Self.failureRetryBackoff)
             AppLog.warn(.refresh, "\(providerID) failed: \(message)")
-            onRefreshOutcome?(providerID, .failed, snapshot.errorCategory, force)
             return .failed
         }
         if providerErrors[providerID] != nil {
@@ -391,8 +383,7 @@ final class WidgetDataStore {
                 local: snapshot,
                 history: history,
                 descriptor: descriptor,
-                now: now(),
-                combined: false
+                now: now()
             )
             AppLog.debug(.refresh, "preserved last-good history for \(providerID) after scan miss")
         }
@@ -405,9 +396,7 @@ final class WidgetDataStore {
             persist: snapshotRebuildDeferrals == 0
         )
         requestSnapshotRebuild()
-        if notifyHistoryChange { onLocalHistoryChanged?() }
         AppLog.info(.refresh, "\(providerID) ok (\(durationMs)ms)")
-        onRefreshOutcome?(providerID, .refreshed, nil, force)
         return .refreshed
     }
 
@@ -432,80 +421,9 @@ final class WidgetDataStore {
         requestSnapshotRebuild()
     }
 
-    /// Rebuild the in-memory union immediately after a provider toggle. Local cached data remains
-    /// available to direct API reads, but disabled providers stop receiving peer contributions.
+    /// Rebuild the rendered snapshots immediately after a provider toggle.
     func providerEnablementDidChange() {
         rebuildRenderedSnapshots()
-    }
-
-    /// Replaces the downloaded peer set. A conflicted duplicate device file resolves to the newest
-    /// valid document, and this Mac's own downloaded copy is excluded in favor of current memory.
-    func setPeerHistoryDocuments(_ documents: [UsageHistoryDocument], ownDeviceID: String) {
-        peerHistoryDocuments = UsageHistoryDocument.newestByDevice(documents)
-            .filter { $0.deviceID != ownDeviceID }
-        rebuildRenderedSnapshots()
-    }
-
-    func clearPeerHistoryDocuments() {
-        guard !peerHistoryDocuments.isEmpty else { return }
-        peerHistoryDocuments = []
-        rebuildRenderedSnapshots()
-    }
-
-    func localHistoryDocument(deviceID: String, deviceName: String, updatedAt: Date = Date()) -> UsageHistoryDocument {
-        var providers: [String: ProviderUsageHistory] = [:]
-        var identities: [String: String] = [:]
-        let hasMultipleClaudeCards = registry.providers.count {
-            ProviderAccountID.family(of: $0.id) == "claude"
-        } > 1
-        for (providerID, descriptor) in registry.historyDescriptorsByProvider
-        where descriptor.scope == .machineLocal && isProviderEnabled(providerID) {
-            if let history = localSnapshots[providerID]?.usageHistory {
-                if ProviderAccountID.family(of: providerID) == "claude" {
-                    if let identity = providerIdentityKeys[providerID] {
-                        identities[providerID] = identity.lowercased()
-                    } else if hasMultipleClaudeCards || providerID != "claude" {
-                        AppLog.warn(.config, "sync: omitting Claude history without account ownership")
-                        continue
-                    }
-                }
-                if ProviderAccountID.family(of: providerID) == "codex",
-                   let identity = providerIdentityKeys[providerID], identity.contains("|") {
-                    guard CodexAccountIdentity.isComplete(key: identity) else { continue }
-                    identities[providerID] = identity.lowercased()
-                }
-                providers[providerID] = history
-            }
-        }
-        let exportedClaudeIDs = providers.keys.filter {
-            ProviderAccountID.family(of: $0) == "claude"
-        }
-        if let onlyClaudeID = exportedClaudeIDs.first,
-           exportedClaudeIDs.count == 1, onlyClaudeID != "claude"
-        {
-            providers["claude"] = providers.removeValue(forKey: onlyClaudeID)
-            identities["claude"] = identities.removeValue(forKey: onlyClaudeID)
-        }
-        let hasClaudeAccountCards = providers.keys.contains {
-            ProviderAccountID.family(of: $0) == "claude" && $0 != "claude"
-        }
-        let usesAccountSchema = hasClaudeAccountCards || identities.keys.contains {
-            ProviderAccountID.family(of: $0) == "codex"
-        }
-        // v2 requires ownership for every Claude entry, even a legacy bare card. One unresolved
-        // login must not invalidate the document and block syncing every other provider.
-        if usesAccountSchema, providers["claude"] != nil, identities["claude"] == nil {
-            providers.removeValue(forKey: "claude")
-            AppLog.warn(.config, "sync: omitting unresolved Claude history from account-aware export")
-        }
-        return UsageHistoryDocument(
-            schema: usesAccountSchema ? UsageHistoryDocument.accountSchema : UsageHistoryDocument.currentSchema,
-            deviceID: deviceID,
-            deviceName: deviceName,
-            updatedAt: updatedAt,
-            providers: providers,
-            identities: identities.isEmpty ? nil : identities
-        )
     }
 
     private func requestSnapshotRebuild() {
@@ -532,42 +450,7 @@ final class WidgetDataStore {
     }
 
     private func rebuildRenderedSnapshots() {
-        guard !peerHistoryDocuments.isEmpty else {
-            snapshots = localSnapshots
-            return
-        }
-        let renderDate = now()
-        let enabledDescriptors = registry.historyDescriptorsByProvider.reduce(
-            into: [String: UsageHistoryDescriptor]()
-        ) { result, entry in
-            if isProviderEnabled(entry.key) { result[entry.key] = entry.value }
-        }
-        let merged = UsageHistoryAggregator.merged(
-            localSnapshots: localSnapshots,
-            peerDocuments: peerHistoryDocuments,
-            descriptors: enabledDescriptors,
-            providerIdentityKeys: providerIdentityKeys,
-            now: renderDate
-        )
-        var rendered = localSnapshots
-        for (providerID, history) in merged {
-            guard let descriptor = registry.historyDescriptorsByProvider[providerID],
-                  let provider = registry.provider(id: providerID)
-            else { continue }
-            let local = localSnapshots[providerID] ?? ProviderSnapshot(
-                providerID: providerID,
-                displayName: provider.displayName,
-                lines: [],
-                refreshedAt: peerHistoryDocuments.map(\.updatedAt).max() ?? renderDate
-            )
-            rendered[providerID] = UsageHistorySnapshotRenderer.render(
-                local: local,
-                history: history,
-                descriptor: descriptor,
-                now: renderDate
-            )
-        }
-        snapshots = rendered
+        snapshots = localSnapshots
     }
 
     /// The provider's latest refresh error, or `nil` when its last refresh succeeded.
@@ -635,6 +518,28 @@ final class WidgetDataStore {
     /// per-cycle aging, which would flicker a hint on healthy providers.
     static let stalenessThreshold = RefreshSetting.interval * 2
 
+    /// The provider's own staleness threshold: two of its refresh intervals, never under a minute, so a
+    /// fast source (market prices) is called out once it has missed a couple of its short cycles.
+    func stalenessThreshold(for providerID: String) -> TimeInterval {
+        max(refreshInterval(for: providerID) * 2, 60)
+    }
+
+    /// The freshness window for one provider, clamped so a misconfigured plugin can't spin the loop.
+    func refreshInterval(for providerID: String) -> TimeInterval {
+        let interval = providersByID[providerID]?.refreshInterval ?? RefreshSetting.interval
+        return min(max(interval, RefreshSetting.minimumInterval), RefreshSetting.interval)
+    }
+
+    /// How long the periodic loop should sleep before its next pass: the shortest interval among the
+    /// enabled providers, so a fast provider refreshes on its own cadence while everything else stays
+    /// a cache hit until its window elapses.
+    func nextRefreshWait() -> TimeInterval {
+        registry.providers.map(\.id)
+            .filter { isProviderEnabled($0) }
+            .map { refreshInterval(for: $0) }
+            .min() ?? RefreshSetting.interval
+    }
+
     /// A compact "Outdated" hint for the provider's on-screen snapshot, surfaced only once that snapshot
     /// has aged past `stalenessThreshold`; `nil` while the data is still current (the common case), so the
     /// header stays clean until staleness is real. The label is short on purpose — a long plan name plus a
@@ -645,7 +550,7 @@ final class WidgetDataStore {
     func stalenessHint(for providerID: String) -> StalenessHint? {
         guard let refreshedAt = snapshots[providerID]?.refreshedAt else { return nil }
         let age = now().timeIntervalSince(refreshedAt)
-        guard age >= Self.stalenessThreshold, let duration = Formatters.compactDuration(age) else {
+        guard age >= stalenessThreshold(for: providerID), let duration = Formatters.compactDuration(age) else {
             return nil
         }
         return StalenessHint(label: "Outdated", tooltip: "Last updated \(duration) ago")

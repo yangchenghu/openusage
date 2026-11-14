@@ -54,7 +54,6 @@ struct SettingsScreen: View {
         // Same section rhythm as the dashboard and Customize (all read the density setting).
         VStack(alignment: .leading, spacing: density.sectionSpacing) {
             generalSection
-            ICloudSyncSettingsSection(sync: container.iCloudSync)
             appearanceSection
             usageDisplaySection
             notificationsSection
@@ -209,20 +208,6 @@ struct SettingsScreen: View {
                     .settingsSwitchStyle()
             }
             Text("While your screen is shared or recorded, the menu bar shows “OpenUsage” instead of your usage.")
-                .font(.caption)
-                .foregroundStyle(.secondary)
-                .padding(.horizontal, 12)
-                .padding(.bottom, 8)
-                .frame(maxWidth: .infinity, alignment: .leading)
-            row("Help Make OpenUsage Better") {
-                Toggle("", isOn: Binding(
-                    get: { container.telemetry.isEnabled },
-                    set: { container.telemetry.setEnabled($0) }
-                ))
-                .settingsSwitchStyle()
-            }
-            // Daily activity and crash reports are always on; the toggle only gates extra analytics.
-            Text("Share additional anonymous usage stats that tell the team where to improve.")
                 .font(.caption)
                 .foregroundStyle(.secondary)
                 .padding(.horizontal, 12)
@@ -453,7 +438,7 @@ struct SettingsScreen: View {
                 }
                 Button("Cancel", role: .cancel) {}
             } message: {
-                Text("Restores every setting and customization to its default and turns providers back on for the tools you have installed. If iCloud sync is on, it turns off and this Mac's synced history is removed. This cannot be undone.")
+                Text("Restores every setting and customization to its default and turns providers back on for the tools you have installed. This cannot be undone.")
             }
         }
     }

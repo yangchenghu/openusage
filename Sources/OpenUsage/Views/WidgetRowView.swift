@@ -301,7 +301,7 @@ struct WidgetRowView: View {
             VStack(alignment: .trailing, spacing: 2) {
                 HStack(spacing: 4) {
                     expiryStatusDot
-                    Text(data.unboundedDetail)
+                    UnboundedValueText(data: data)
                         .font(supportingFont)
                         .foregroundStyle(.primary) // the value is the row's payload — match the bounded headline
                         .contentTransition(.numericText())
@@ -418,7 +418,9 @@ struct WidgetRowView: View {
                 .font(.system(size: density.supportingPointSize, weight: .semibold))
                 .foregroundStyle(.primary)
                 .lineLimit(1)
-                .fixedSize(horizontal: true, vertical: false)
+                // Truncate rather than size to fit: the value column is fixed-width, so a long label
+                // plus a long value must give way here instead of widening the 320pt panel.
+                .truncationMode(.tail)
             unknownModelWarningIcon
         }
     }

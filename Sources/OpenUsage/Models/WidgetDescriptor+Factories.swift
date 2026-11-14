@@ -69,7 +69,8 @@ extension WidgetDescriptor {
         valueWord: String? = nil,
         isUsagePeriod: Bool = false,
         traySuffix: String? = nil,
-        showsResetExpiries: Bool = false
+        showsResetExpiries: Bool = false,
+        valueSeparator: String? = nil
     ) -> WidgetDescriptor {
         // `kind` is unused for `.values` rendering (each value carries its own), but a count-only tile
         // reads tidier seeded as `.count`; everything else defaults to `.dollars`.
@@ -80,6 +81,7 @@ extension WidgetDescriptor {
         sample.isUsagePeriod = isUsagePeriod
         sample.traySuffix = traySuffix
         sample.showsResetExpiries = showsResetExpiries
+        if let valueSeparator { sample.valueSeparator = valueSeparator }
         return make(id: id, provider: provider, metricLabel: metricLabel ?? title, sample: sample)
     }
 

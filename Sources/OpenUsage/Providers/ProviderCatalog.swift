@@ -69,6 +69,7 @@ enum ProviderCatalog {
             CursorProvider(accountSession: CursorAccountSession()),
             AntigravityProvider(),
             CopilotProvider(defaults: defaults),
+            CryptoPriceProvider(settings: .load(from: defaults)),
             DevinProvider(),
             GrokProvider(),
             OllamaProvider(),

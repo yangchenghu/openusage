@@ -10,8 +10,6 @@ final class AppContainer {
     let registry: WidgetRegistry
     let layout: LayoutStore
     let dataStore: WidgetDataStore
-    /// Opt-in private iCloud document sync for additive machine-local daily history.
-    let iCloudSync: ICloudUsageSyncStore
     /// Single source of truth for which providers the user has turned off. Both stores consult it (via
     /// injected closures) and the Customize provider list drives it.
     let enablement: ProviderEnablementStore
@@ -22,9 +20,6 @@ final class AppContainer {
     /// Quota pace notification preferences (three independent triggers). Drives the Settings section
     /// and is read by `WidgetDataStore.evaluateNotifications`.
     let notificationSettings: NotificationSettingsStore
-    /// Anonymous usage telemetry (mandatory daily activity and crashes, optional provider rollups).
-    /// Exposed so Settings can toggle extra analytics and termination can flush queued events.
-    let telemetry: TelemetryRecorder
     /// Source of truth for the popover's transparency: the persisted Increase Transparency toggle, the
     /// ephemeral secret-code easter-egg state, and the system accessibility flags it yields to. Read by both
     /// the SwiftUI surface and the AppKit panel (`StatusItemController`).
@@ -80,11 +75,16 @@ final class AppContainer {
         let accountDefaults: ([String]) -> [String] = { metricIDs in
             DefaultLayout.expandingAccounts(metricIDs, providerIDs: registry.providers.map(\.id))
         }
+        // Crypto Prices' tile IDs follow the user's coin list, so its defaults are derived at launch and
+        // appended; a coin added later is seeded into the layout on the next launch like any new default.
+        let cryptoDefaults = CryptoPriceProvider.defaultLayout(
+            coins: providers.compactMap { $0 as? CryptoPriceProvider }.first?.settings.coins ?? []
+        )
         let layout = LayoutStore(
             registry: registry,
-            defaultMetricIDs: accountDefaults(DefaultLayout.metricIDs),
-            defaultPinnedMetricIDs: accountDefaults(DefaultLayout.pinnedMetricIDs),
-            defaultExpandedMetricIDs: accountDefaults(DefaultLayout.expandedMetricIDs),
+            defaultMetricIDs: accountDefaults(DefaultLayout.metricIDs) + cryptoDefaults.metricIDs,
+            defaultPinnedMetricIDs: accountDefaults(DefaultLayout.pinnedMetricIDs) + cryptoDefaults.pinnedMetricIDs,
+            defaultExpandedMetricIDs: accountDefaults(DefaultLayout.expandedMetricIDs) + cryptoDefaults.expandedMetricIDs,
             isProviderEnabled: { [enablement] in enablement.isEnabled($0) }
         )
         let dataStore = WidgetDataStore(
@@ -95,13 +95,11 @@ final class AppContainer {
             notificationSettings: { notificationSettings },
             providerIdentityKeys: accountAssembly.identityKeysByCard
         )
-        let iCloudSync = ICloudUsageSyncStore(dataStore: dataStore)
         // Re-enabling a provider should fetch it promptly, so clear any leftover failure backoff before
         // the enablement wake refreshes. `weak` breaks the cycle (dataStore already captures enablement).
         enablement.onProviderEnabled = { [weak dataStore] id in dataStore?.clearFailureBackoff(for: id) }
-        enablement.onChange = { [weak dataStore, weak iCloudSync] in
+        enablement.onChange = { [weak dataStore] in
             dataStore?.providerEnablementDidChange()
-            iCloudSync?.scheduleWrite()
         }
         // Fresh installs start with nothing on; the welcome screen turns on the user's picks. No-op on
         // every later launch.
@@ -127,7 +125,6 @@ final class AppContainer {
         self.notificationSettings = notificationSettings
         self.layout = layout
         self.dataStore = dataStore
-        self.iCloudSync = iCloudSync
 
         // The resets popover's claim services, sharing each provider's credential loading and HTTP
         // client so the claim's auth can't drift from the provider's. A claim forces a refresh so the
@@ -151,36 +148,6 @@ final class AppContainer {
         }
         self.resetClaims = resetClaims
 
-        // Anonymous usage telemetry (mandatory daily activity and crashes, optional provider rollups).
-        // Its state lives in a dedicated UserDefaults suite, kept separate from app settings so the user's
-        // optional-analytics choice and the install id stay independent of any settings change. The
-        // snapshot closure reads the live layout/enablement so `app_daily_active` always reflects
-        // the current configuration.
-        let telemetryStore = TelemetryStore()
-        let telemetry = TelemetryRecorder(
-            sink: PostHogTelemetrySink(enabled: telemetryStore.enabled),
-            store: telemetryStore,
-            snapshot: { [registry, enablement, layout] in
-                // Report the *active* configuration: a metric whose provider is turned off is hidden
-                // from the dashboard and menu bar, so exclude it here too — keeping the metric arrays
-                // consistent with `enabledProviders` (which is also enablement-filtered).
-                let providerOn: (String) -> Bool = { metricID in
-                    guard let providerID = registry.descriptor(id: metricID)?.providerID else { return false }
-                    return enablement.isEnabled(providerID)
-                }
-                return TelemetryConfigSnapshot(
-                    enabledProviders: registry.providers.map(\.id).filter { enablement.isEnabled($0) },
-                    enabledMetricIDs: layout.placed.map(\.descriptorID).filter(providerOn),
-                    pinnedMetricIDs: layout.pinnedMetricIDs.filter(providerOn),
-                    expandedMetricIDs: layout.expandedMetricIDs.filter(providerOn),
-                    menuBarStyle: layout.menuBarStyle.rawValue
-                )
-            }
-        )
-        dataStore.onRefreshOutcome = { [weak telemetry] providerID, outcome, category, manual in
-            telemetry?.record(providerID: providerID, outcome: outcome, category: category, manual: manual)
-        }
-        self.telemetry = telemetry
         self.transparency = PopoverTransparencyStore()
         self.privacy = MenuBarPrivacyStore()
         self.localAPI = LocalUsageServer(state: { [layout, enablement, dataStore] in
@@ -220,7 +187,7 @@ final class AppContainer {
 
     func startRefreshing() {
         guard refreshTask == nil else { return }
-        refreshTask = Self.startPeriodicRefresh(dataStore: dataStore, telemetry: telemetry)
+        refreshTask = Self.startPeriodicRefresh(dataStore: dataStore)
     }
 
     /// Re-runs first-launch credential detection on demand — the enablement half of the Customize
@@ -233,10 +200,8 @@ final class AppContainer {
 
     /// The Settings "Reset All Settings" action: restores every user preference the container owns to
     /// its default (see `docs/settings.md` § Reset). Composes the Customize reset (`resetToDefault` +
-    /// provider reseed) with the Settings-only preferences. Deliberately untouched: telemetry (the
-    /// optional-analytics choice and install id stay independent of settings changes — see the
-    /// `TelemetryStore` note above), the iCloud sync device identity, provider credentials, and
-    /// cached usage snapshots.
+    /// provider reseed) with the Settings-only preferences. Deliberately untouched: provider credentials
+    /// and cached usage snapshots.
     /// Launch at Login and the Sparkle update preferences live outside the container; the Settings
     /// screen resets those alongside this call.
     func resetAllSettings() {
@@ -248,9 +213,6 @@ final class AppContainer {
         notificationSettings.resetToDefaults()
         transparency.resetToDefaults()
         privacy.hideUsageWhileScreenSharing = false
-        // Same as flipping the Settings toggle off: stops syncing and removes this Mac's document
-        // from the shared iCloud container (peers keep their own history).
-        iCloudSync.enabled = false
         // Removing an `@AppStorage` key restores its declared default; the Settings screen's
         // `@AppStorage` properties observe the change. New settings must be added here.
         for key in [
@@ -284,7 +246,7 @@ final class AppContainer {
     /// Sparkle's update bookkeeping, and unrelated global-domain changes from other processes. Waking on
     /// that, with no minimum interval before re-refreshing, collapsed the fixed 5-minute cadence into a
     /// refresh storm.
-    private static func startPeriodicRefresh(dataStore: WidgetDataStore, telemetry: TelemetryRecorder) -> Task<Void, Never> {
+    private static func startPeriodicRefresh(dataStore: WidgetDataStore) -> Task<Void, Never> {
         Task {
             let wakeSignal = RefreshWakeSignal()
             while !Task.isCancelled {
@@ -293,11 +255,7 @@ final class AppContainer {
                 // and on every loop (not just on a fetch) so pace worsening from elapsed time alone still
                 // alerts even with the popover closed.
                 await dataStore.evaluateNotifications()
-                // Day-rollover beat: always emits `app_daily_active` once per local day; flushes
-                // prior-day provider rollups only while optional analytics are on. Runs on launch
-                // and every interval, so always-running instances still produce a daily-active signal.
-                telemetry.tick()
-                await wakeSignal.waitForWake(timeout: RefreshSetting.interval)
+                await wakeSignal.waitForWake(timeout: dataStore.nextRefreshWait())
             }
         }
     }

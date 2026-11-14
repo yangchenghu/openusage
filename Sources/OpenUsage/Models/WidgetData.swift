@@ -67,6 +67,9 @@ struct WidgetData: Hashable {
     /// Which of `values` this widget renders — cost-only, tokens-only, or the combined `.all`. Set by
     /// the descriptor factory, so one provider row can back several tiles and the mapper stays oblivious.
     var selection: ValueSelection = .all
+    /// Joins a multi-value row's readings: " · " for distinct readings ("$4.08 · 1.2M tokens"), or
+    /// " – " for a span (Crypto Prices' 24h range, "65,813.00 – 69,132.90").
+    var valueSeparator: String = " · "
     /// True only for the Today / Yesterday / Last 30 Days spend tiles, where the row's values accumulate
     /// over a time window so an all-zero reading means "nothing was used." Balance/availability rows
     /// (Codex Rate Limit Resets, an exhausted Extra Usage credit) read zero when *depleted*, not idle, so
@@ -223,6 +226,7 @@ struct WidgetData: Hashable {
         case .percent: return value.rounded()
         case .count: return (value * 10).rounded() / 10
         case .dollars: return (value * 100).rounded() / 100
+        case .price, .change: return value
         }
     }
 
@@ -304,6 +308,8 @@ struct WidgetData: Hashable {
         case .count:
             // The unit (e.g. "credits") shows whether the count is bounded or a plain balance.
             return countSuffix
+        case .price, .change:
+            return nil
         }
     }
 
@@ -332,7 +338,7 @@ struct WidgetData: Hashable {
                 }
                 return MetricFormatter.string(for: value, style: .row)
             }
-            return selected.map { MetricFormatter.string(for: $0, style: .row) }.joined(separator: " · ")
+            return selected.map { MetricFormatter.string(for: $0, style: .row) }.joined(separator: valueSeparator)
         }
         // Fallback for an unbounded row without typed values: "<value> <suffix> <word>".
         let word = unboundedValueWord ?? displayMode.label.lowercased()
@@ -421,7 +427,7 @@ struct WidgetData: Hashable {
         guard hasData else { return nil }
         let selected = selectedValues
         guard selected.contains(where: { abs($0.number) >= 1000 }) || unboundedTooltipNote != nil else { return nil }
-        return selected.map { MetricFormatter.string(for: $0, style: .full) }.joined(separator: " · ")
+        return selected.map { MetricFormatter.string(for: $0, style: .full) }.joined(separator: valueSeparator)
     }
 
     /// Hover text for an unbounded row's **value** (and the expiry-warning icon): the per-credit expiry

@@ -1,5 +1,10 @@
 # Updates
 
+> **This fork ships with in-app updates turned off.** Release builds no longer bake in the upstream
+> appcast, so the updater stays dormant and Settings hides the Updates section. To turn updates back on,
+> host your own appcast and build with `FEED_URL` and `SPARKLE_PUBLIC_KEY` set (see `script/release.sh`).
+> The rest of this page describes how updates behave once a feed is configured.
+
 OpenUsage keeps itself up to date using [Sparkle](https://sparkle-project.org), the standard update
 framework for Mac apps. Updates are downloaded from OpenUsage's own release feed and verified before
 they install, so you always get a genuine, unmodified build.

@@ -92,7 +92,9 @@ struct ProviderSnapshotCache {
         return loaded
     }
 
-    func snapshot(providerID: String) -> ProviderSnapshot? {
+    /// `ttl` overrides the cache-wide freshness window for providers with their own refresh cadence.
+    func snapshot(providerID: String, ttl: TimeInterval? = nil) -> ProviderSnapshot? {
+        let ttl = ttl ?? self.ttl
         let snapshot = loadPayload().snapshots[providerID]
         guard let snapshot else { return nil }
         // Freshness has two requirements, and disk age alone is not enough: the snapshot must have been

@@ -38,6 +38,10 @@ enum Theme {
     /// full strength, the positive counterpart to `notice`'s orange.
     static let positive = AnyShapeStyle(Color(nsColor: .systemGreen))
 
+    /// Market-move tints for a signed change (Crypto Prices' 24h change): green up, red down.
+    static let priceUp = Color(nsColor: .systemGreen)
+    static let priceDown = Color(nsColor: .systemRed)
+
     // MARK: - Surfaces
 
     /// The popover's opaque backdrop ("tray") behind the grouped cards — `textBackgroundColor`, the
