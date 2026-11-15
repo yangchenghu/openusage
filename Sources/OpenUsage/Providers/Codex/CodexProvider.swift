@@ -77,7 +77,13 @@ final class CodexProvider: ProviderRuntime {
         ] + WidgetDescriptor.spendTiles(provider: provider)
     }
 
+    var requiresOpenUsageSignIn: Bool { authStore.signIn != nil }
+
     func hasLocalCredentials() async -> Bool {
+        // A sign-in-gated card is "detected" only by its OpenUsage sign-in, never by the CLI's login.
+        if authStore.signIn != nil {
+            return await loadOffMainActor({ [authStore] in (try? authStore.loadSignInAuth()) ?? nil }) != nil
+        }
         // Same sources as `refresh()`: auth.json candidates first, keychain as the fallback. Only a
         // usable access token counts (see `hasUsableAccessToken`) — an API-key-only auth.json can't
         // serve the usage API, so seeding it on would just show an error row.
@@ -96,6 +102,7 @@ final class CodexProvider: ProviderRuntime {
     }
 
     func refresh() async -> ProviderSnapshot {
+        if authStore.signIn != nil { return await refreshSignedIn() }
         if authStore.expectedIdentity != nil { return await refreshAccount() }
         let fileCandidates = authStore.loadAuthCandidates()
         var lastFallbackError: Error?
@@ -340,6 +347,30 @@ final class CodexProvider: ProviderRuntime {
             return await loadOffMainActor { [authStore] in authStore.loadKeychainAuth(account: account) }
         case .pi(let source):
             return authStore.loadPiAuth(source)
+        case .openUsage:
+            return await loadOffMainActor { [authStore] in (try? authStore.loadSignInAuth()) ?? nil }
+        }
+    }
+
+    /// A sign-in-gated card reads only its OpenUsage sign-in, so `auth.json` and the Codex Keychain item
+    /// are never read; signed out, it reports that instead of borrowing the CLI's login.
+    private func refreshSignedIn() async -> ProviderSnapshot {
+        let loaded: CodexAuthState?
+        do {
+            loaded = try await loadOffMainActor { [authStore] in try authStore.loadSignInAuth() }
+        } catch {
+            return ProviderSnapshot.error(provider: provider, error: error)
+        }
+        guard var state = loaded else {
+            return ProviderSnapshot.error(provider: provider, error: CodexAuthError.notSignedIn)
+        }
+        do {
+            return try await probe(authState: &state)
+        } catch let error as CodexAuthError where error.allowsAuthFallback {
+            AppLog.warn(LogTag.auth("codex"), "OpenUsage sign-in rejected (\(error))")
+            return ProviderSnapshot.error(provider: provider, error: CodexAuthError.signInExpired)
+        } catch {
+            return ProviderSnapshot.error(provider: provider, error: error)
         }
     }
 
@@ -378,7 +409,8 @@ final class CodexProvider: ProviderRuntime {
             AppLog.error(LogTag.auth("codex"), "failed to persist rotated credentials; using the refreshed token for this session only: \(error.localizedDescription)")
         }
         authState = rotated
-        if authStore.expectedIdentity != nil {
+        // A sign-in may deliberately be a different account than the card's discovered login.
+        if authStore.expectedIdentity != nil, authState.source != .openUsage {
             if authStore.scoped(authState) == nil {
                 AppLog.warn(LogTag.auth("codex"), "rotated credential no longer names this account; trying a matching login")
                 throw CodexAuthError.tokenConflict

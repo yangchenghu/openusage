@@ -11,6 +11,10 @@ enum ClaudeAuthError: Error, LocalizedError, Equatable {
     case tokenExpired
     case credentialsChanged
     case invalidOAuthURL(String)
+    /// The OpenUsage sign-in was refused on renewal; only signing in again fixes it.
+    case signInExpired
+    /// This card is turned on by an OpenUsage sign-in and none exists.
+    case notSignedIn
 
     var errorDescription: String? {
         switch self {
@@ -32,6 +36,10 @@ enum ClaudeAuthError: Error, LocalizedError, Equatable {
             return "Claude login changed during refresh. Refresh again."
         case .invalidOAuthURL(let value):
             return "Invalid Claude OAuth URL: \(value). Check CLAUDE_CODE_CUSTOM_OAUTH_URL / CLAUDE_LOCAL_OAUTH_API_BASE."
+        case .signInExpired:
+            return "Your Claude sign-in expired. Click login beside Claude in Customize."
+        case .notSignedIn:
+            return "Not signed in. Click login beside Claude in Customize."
         }
     }
 
@@ -46,7 +54,7 @@ enum ClaudeAuthError: Error, LocalizedError, Equatable {
         case .sessionExpired, .tokenExpired, .desktopTokenExpired, .swapTokenExpired:
             return true
         case .notLoggedIn, .desktopPermissionRequired, .desktopCredentialsUnavailable,
-             .credentialsChanged, .invalidOAuthURL:
+             .credentialsChanged, .invalidOAuthURL, .signInExpired, .notSignedIn:
             return false
         }
     }
@@ -77,6 +85,9 @@ struct ClaudeAuthStore: Sendable {
     let desktopOnly: Bool
     let swapAccount: ClaudeSwapAccount?
     let preferOrganizationScopedDesktop: Bool
+    /// OpenUsage's own sign-in for this card. While it holds an account it is the only source: Claude
+    /// Code's Keychain, its credentials file, and Claude Desktop are never read (no prompts).
+    let signIn: (any SignedInAccountStoring)?
 
     init(
         environment: EnvironmentReading = ProcessEnvironmentReader(),
@@ -88,6 +99,7 @@ struct ClaudeAuthStore: Sendable {
         desktopOnly: Bool = false,
         swapAccount: ClaudeSwapAccount? = nil,
         preferOrganizationScopedDesktop: Bool = false,
+        signIn: (any SignedInAccountStoring)? = nil,
         now: @escaping @Sendable () -> Date = Date.init
     ) {
         self.environment = environment
@@ -99,6 +111,7 @@ struct ClaudeAuthStore: Sendable {
         self.desktopOnly = desktopOnly
         self.swapAccount = swapAccount
         self.preferOrganizationScopedDesktop = preferOrganizationScopedDesktop
+        self.signIn = signIn
         self.now = now
     }
 
@@ -111,6 +124,18 @@ struct ClaudeAuthStore: Sendable {
         allowDesktopInteraction: Bool = false,
         forceDesktopFallback: Bool = false
     ) -> ClaudeCredentialLoad {
+        if let signIn {
+            // The sign-in is this card's only source; without one it is signed out, not "use Claude
+            // Code's login". `.notFound` keeps the provider from retrying through Claude Desktop.
+            do {
+                guard let account = try signIn.load() else {
+                    return ClaudeCredentialLoad(candidates: [], desktopStatus: .notFound, signInError: ClaudeAuthError.notSignedIn)
+                }
+                return ClaudeCredentialLoad(candidates: [Self.signInState(account)], desktopStatus: .notFound)
+            } catch {
+                return ClaudeCredentialLoad(candidates: [], desktopStatus: .notFound, signInError: error)
+            }
+        }
         var stored: [ClaudeCredentialState]
         if let swapAccount {
             var candidates: [ClaudeCredentialState] = []
@@ -216,7 +241,33 @@ struct ClaudeAuthStore: Sendable {
     /// Save an OAuth rotation only if the ordered effective candidate set is unchanged. Checking the
     /// whole generation catches a newly added higher-priority source as well as replacement in place.
     /// The underlying stores provide no atomic compare-and-swap, so this remains best-effort.
+    /// The OpenUsage sign-in as a credential candidate. Expiry is epoch milliseconds, like Claude Code's.
+    static func signInState(_ account: SignedInAccount) -> ClaudeCredentialState {
+        ClaudeCredentialState(
+            oauth: ClaudeOAuth(
+                accessToken: account.accessToken,
+                refreshToken: account.refreshToken,
+                expiresAt: account.expiresAt.map { $0.timeIntervalSince1970 * 1000 },
+                scopes: account.scopes?.split(separator: " ").map(String.init)
+            ),
+            source: .openUsage,
+            fullData: nil,
+            inferenceOnly: false
+        )
+    }
+
     func save(_ state: ClaudeCredentialState, ifUnchanged expected: ClaudeCredentialGeneration) throws -> Bool {
+        if state.source == .openUsage {
+            guard let signIn, var account = try signIn.load(),
+                  ClaudeCredentialGeneration([Self.signInState(account)]) == expected
+            else { return false }
+            account.accessToken = state.oauth.accessToken ?? account.accessToken
+            account.refreshToken = state.oauth.refreshToken ?? account.refreshToken
+            account.expiresAt = state.oauth.expiresAt.map { Date(timeIntervalSince1970: $0 / 1000) }
+            try signIn.save(account)
+            AppLog.debug(LogTag.auth("claude"), "persisted rotated credentials (source=openUsage)")
+            return true
+        }
         let current = loadCredentialSet().candidates
         guard ClaudeCredentialGeneration(current) == expected,
               let latest = current.first(where: { $0.source == state.source })?.fullData
@@ -236,7 +287,7 @@ struct ClaudeAuthStore: Sendable {
             try keychain.writeGenericPassword(service: service, value: text)
         case .desktop, .swapVault:
             return false
-        case .environment:
+        case .environment, .openUsage:
             return false
         }
         // NEVER log the credential blob/tokens — only that a rotation was persisted, and to where.

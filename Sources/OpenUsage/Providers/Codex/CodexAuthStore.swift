@@ -38,6 +38,8 @@ struct CodexAuthState: Hashable, Sendable {
         case file(path: String)
         case keychain(account: String)
         case pi(CodexPiCredentialSource)
+        /// Signed in inside OpenUsage; tokens live in OpenUsage's own Keychain item.
+        case openUsage
     }
 
     var auth: CodexAuth
@@ -60,6 +62,10 @@ enum CodexAuthError: Error, LocalizedError, Equatable {
     case tokenExpired
     case usageAPIKey
     case invalidAuthPayload
+    /// The OpenUsage sign-in was refused on renewal; only signing in again fixes it.
+    case signInExpired
+    /// This card is turned on by an OpenUsage sign-in and none exists.
+    case notSignedIn
 
     var errorDescription: String? {
         switch self {
@@ -77,6 +83,10 @@ enum CodexAuthError: Error, LocalizedError, Equatable {
             return "Usage not available for API key."
         case .invalidAuthPayload:
             return "Codex auth data is invalid."
+        case .signInExpired:
+            return "Your ChatGPT sign-in expired. Click login beside Codex in Customize."
+        case .notSignedIn:
+            return "Not signed in. Click login beside Codex in Customize."
         }
     }
 
@@ -84,7 +94,7 @@ enum CodexAuthError: Error, LocalizedError, Equatable {
         switch self {
         case .sessionExpired, .tokenConflict, .tokenRevoked, .tokenExpired:
             return true
-        case .notLoggedIn, .usageAPIKey, .invalidAuthPayload:
+        case .notLoggedIn, .usageAPIKey, .invalidAuthPayload, .signInExpired, .notSignedIn:
             return false
         }
     }
@@ -107,6 +117,8 @@ struct CodexAuthStore: Sendable {
     /// write back. Empty for the plain card, which writes wherever it reads.
     var writableAuthHomes: Set<String>
     var piCredentialSources: [CodexPiCredentialSource]
+    /// OpenUsage's own sign-in for this card. While it holds an account it is the only source.
+    var signIn: (any SignedInAccountStoring)?
 
     init(
         environment: EnvironmentReading = ProcessEnvironmentReader(),
@@ -116,7 +128,8 @@ struct CodexAuthStore: Sendable {
         expectedIdentity: CodexAccountIdentity? = nil,
         additionalAuthHomes: [String] = [],
         writableAuthHomes: Set<String> = [],
-        piCredentialSources: [CodexPiCredentialSource] = []
+        piCredentialSources: [CodexPiCredentialSource] = [],
+        signIn: (any SignedInAccountStoring)? = nil
     ) {
         self.environment = environment
         self.files = files
@@ -126,6 +139,19 @@ struct CodexAuthStore: Sendable {
         self.additionalAuthHomes = additionalAuthHomes
         self.writableAuthHomes = writableAuthHomes
         self.piCredentialSources = piCredentialSources
+        self.signIn = signIn
+    }
+
+    /// The OpenUsage sign-in as a credential, or `nil` when signed out. Not `scoped`: the sign-in is
+    /// OpenUsage's to rotate, never a read-only borrowed login. Blocking (Keychain).
+    func loadSignInAuth() throws -> CodexAuthState? {
+        guard let signIn, let account = try signIn.load() else { return nil }
+        return CodexAuthState(auth: CodexAuth(tokens: CodexTokens(
+            accessToken: account.accessToken,
+            refreshToken: account.refreshToken,
+            idToken: account.extras[SignedInAccount.idTokenKey],
+            accountID: account.extras[SignedInAccount.chatGPTAccountIDKey]
+        )), source: .openUsage)
     }
 
     func loadAuthCandidates() -> [CodexAuthState] {
@@ -189,6 +215,15 @@ struct CodexAuthStore: Sendable {
             try keychain.writeGenericPassword(service: Self.keychainService, account: account, value: text)
         case .pi:
             throw CodexAuthError.tokenConflict
+        case .openUsage:
+            guard let signIn, var account = try signIn.load() else { throw CodexAuthError.tokenConflict }
+            if let onDisk, try loadSignInAuth() != onDisk { throw CodexAuthError.tokenConflict }
+            let tokens = state.auth.tokens
+            account.accessToken = tokens?.accessToken ?? account.accessToken
+            account.refreshToken = tokens?.refreshToken ?? account.refreshToken
+            account.expiresAt = account.accessToken.isEmpty ? nil : ProviderParse.jwtExpiry(account.accessToken)
+            account.extras[SignedInAccount.idTokenKey] = tokens?.idToken ?? account.extras[SignedInAccount.idTokenKey]
+            try signIn.save(account)
         }
     }
 

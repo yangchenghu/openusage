@@ -16,14 +16,19 @@ final class GrokProvider: ProviderRuntime {
     let logUsageScanner: GrokLogUsageScanner
     let now: @Sendable () -> Date
     let pricing: @Sendable () async -> ModelPricing
+    /// OpenUsage's own sign-in. While it holds an account it is the only source: `~/.grok/auth.json`
+    /// is neither read nor rewritten.
+    let signIn: (any SignedInAccountStoring)?
 
     init(
         authStore: GrokAuthStore = GrokAuthStore(),
         usageClient: GrokUsageClient = GrokUsageClient(),
         logUsageScanner: GrokLogUsageScanner = GrokLogUsageScanner(),
         now: @escaping @Sendable () -> Date = Date.init,
-        pricing: @escaping @Sendable () async -> ModelPricing = { await ModelPricingStore.shared.current() }
+        pricing: @escaping @Sendable () async -> ModelPricing = { await ModelPricingStore.shared.current() },
+        signIn: (any SignedInAccountStoring)? = nil
     ) {
+        self.signIn = signIn
         self.authStore = authStore
         self.usageClient = usageClient
         self.logUsageScanner = logUsageScanner
@@ -46,14 +51,19 @@ final class GrokProvider: ProviderRuntime {
         ] + WidgetDescriptor.spendTiles(provider: provider)
     }
 
+    var requiresOpenUsageSignIn: Bool { signIn != nil }
+
     func hasLocalCredentials() async -> Bool {
+        // Detected only by the OpenUsage sign-in, never by the Grok CLI's login.
+        if signIn != nil { return await loadSignedInAccount() != nil }
         // Same source as `refresh()`: ~/.grok/auth.json with at least one keyed entry.
-        await loadOffMainActor { [authStore] in
+        return await loadOffMainActor { [authStore] in
             ((try? authStore.loadAuthCandidates()) ?? []).isEmpty == false
         }
     }
 
     func refresh() async -> ProviderSnapshot {
+        if signIn != nil { return await refreshSignedIn() }
         do {
             return try await loadAndProbe()
         } catch {
@@ -90,6 +100,11 @@ final class GrokProvider: ProviderRuntime {
         // remote fetch; a failure here fails the provider like any other usage call, except the
         // documented team-principal 412 which has no weekly pool to show.
         let creditsResponse = try await fetchCreditsConfigWithRetry(accessToken: accessToken, state: &state)
+        return try await snapshot(creditsResponse: creditsResponse, accessToken: state.token)
+    }
+
+    /// Everything after the credits call, shared by the local-login and sign-in paths.
+    func snapshot(creditsResponse: HTTPResponse, accessToken: String) async throws -> ProviderSnapshot {
         var mapped: GrokMappedUsage
         var warning: String?
         if GrokUsageMapper.isTeamBillingUnavailable(creditsResponse) {
@@ -105,7 +120,7 @@ final class GrokProvider: ProviderRuntime {
             mapped = try GrokUsageMapper.mapCreditsConfig(creditsResponse)
         }
 
-        let plan = await fetchPlanName(accessToken: state.token)
+        let plan = await fetchPlanName(accessToken: accessToken)
 
         // Local spend tiles from completed session turns. Recorded Grok costs win when available;
         // older turns without a carried cost use the shared pricing store.

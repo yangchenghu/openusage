@@ -52,12 +52,19 @@ struct CustomizeProviderListView: View {
                     grip
                 }
             },
-            trailingControl: cursorSession(for: row).map { AnyView(CursorAccountControl(session: $0)) },
+            trailingControl: trailingControl(for: row),
             onToggle: { container.enablement.setEnabled($0, for: row.id) },
             onOpen: { withAnimation(Motion.spring) { layout.customizeProviderID = row.id } }
         )
         .opacity(activeProviderID == row.id ? 0 : 1)
         .reorderFrame(id: row.id, in: .named(reorderSpaceName))
+    }
+
+    /// Login-gated providers show login/logout instead of the on/off toggle.
+    private func trailingControl(for row: ProviderRow) -> AnyView? {
+        if let session = cursorSession(for: row) { return AnyView(CursorAccountControl(session: session)) }
+        if let session = container.signInSessions[row.id] { return AnyView(SignInAccountControl(session: session)) }
+        return nil
     }
 
     private func cursorSession(for row: ProviderRow) -> CursorAccountSession? {

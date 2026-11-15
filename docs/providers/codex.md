@@ -28,6 +28,15 @@ The Pro identifier mappings were verified against OpenAI's ChatGPT desktop app v
 Other Business/team plans keep their existing names; unfamiliar plan identifiers keep a readable name.
 If Codex reports only a 7-day window, it maps to Weekly without inventing a 5-hour Session meter.
 
+## Signing in inside OpenUsage
+
+Codex is turned on by signing in inside OpenUsage, like Cursor: click **login** beside Codex in
+Customize. Your browser opens ChatGPT's sign-in page and returns to OpenUsage on `localhost:1455`. If that port is busy (for example while `codex login` runs), a device code appears to enter on the page that opens instead. **Copy Link** copies the sign-in page's address to open in another browser; from a browser on another device, paste the `localhost:1455/auth/callback?code=…` address it lands on back into the code field. A successful sign-in turns Codex on and shows **logout**; logging out turns it off.
+While signed out, OpenUsage does not read the provider tool's login on this Mac at all. The tokens
+live in OpenUsage's own Keychain item and renew automatically; if the provider refuses a renewal, the
+card asks you to log in again. With several Codex cards, only the default card is login-gated. The **Account** card in the provider's Customize detail shows
+which account is signed in.
+
 ## Where credentials come from
 
 Sign in once with the Codex CLI (`codex`); OpenUsage reads the same auth files (`$CODEX_HOME` respected) with a Keychain fallback. The first Keychain read can ask you to grant OpenUsage access; choosing **Always Allow** authorizes the signed app for later background reads. macOS may ask once more after Codex renews its Keychain login. If you choose **Deny**, OpenUsage stops asking until you refresh manually. Tokens refresh automatically and rotate back into the same auth file or Keychain item they came from.

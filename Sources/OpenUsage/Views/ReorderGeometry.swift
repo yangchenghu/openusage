@@ -47,6 +47,7 @@ struct ReorderLift {
 
 struct ReorderLiftPreview: View {
     let lift: ReorderLift
+    @Environment(AppContainer.self) private var container
 
     // The previews are deliberately the same views the live screens render (shared row/card
     // builders); reading the density here lets the header→card spacing track the live sections too,
@@ -137,13 +138,17 @@ struct ReorderLiftPreview: View {
             isEnabled: isEnabled,
             metricCount: metricCount,
             handle: { $0 },
-            trailingControl: provider.id == "cursor" ? AnyView(
+            trailingControl: isLoginGated(provider.id) ? AnyView(
                 Button(isEnabled ? "logout" : "login") {}
                     .buttonStyle(.bordered)
                     .controlSize(.small)
             ) : nil
         )
         .liftedRowSurface()
+    }
+
+    private func isLoginGated(_ providerID: String) -> Bool {
+        container.providers.first { $0.provider.id == providerID }?.requiresOpenUsageSignIn ?? false
     }
 
     private func customizeMetricPreview(_ title: String) -> some View {

@@ -95,6 +95,11 @@ enum ProviderParse {
 
     /// Decode a JWT's payload (the middle dot-separated segment) as a JSON object. Base64url is
     /// translated to standard base64 and padded before decoding.
+    /// A JWT's `exp` claim as a date, or `nil` when the token isn't a JWT or carries no expiry.
+    static func jwtExpiry(_ token: String) -> Date? {
+        number(jwtPayload(token)?["exp"]).map { Date(timeIntervalSince1970: $0) }
+    }
+
     static func jwtPayload(_ token: String) -> [String: Any]? {
         let parts = token.split(separator: ".")
         guard parts.count >= 2 else { return nil }

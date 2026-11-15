@@ -8,13 +8,16 @@ enum ProviderCatalog {
         defaults: UserDefaults = .standard,
         claudeCards: [ClaudeAccountCard] = [],
         codex: CodexAccountDiscovery = CodexAccountDiscovery(),
-        claudeIdentityKeys: [String: String] = [:]
+        claudeIdentityKeys: [String: String] = [:],
+        signIn: SignInStores = .live
     ) -> [ProviderRuntime] {
         // Default provider order (see AGENTS.md "## Providers"): the three established providers first,
         // then every other provider alphabetically by display name.
         var providers: [ProviderRuntime]
+        // The OpenUsage sign-in belongs to one card: the default `claude` card, else the first.
+        let signInClaudeCardID = claudeCards.first { $0.id == "claude" }?.id ?? claudeCards.first?.id
         if claudeCards.isEmpty {
-            providers = [ClaudeProvider()]
+            providers = [ClaudeProvider(authStore: ClaudeAuthStore(signIn: signIn.claude))]
         } else {
             providers = claudeCards.map { card in
                 let identity = claudeIdentityKeys[card.id] ?? card.identityKey
@@ -35,7 +38,8 @@ enum ProviderCatalog {
                         desktopOnly: card.usesDesktopCredentials,
                         swapAccount: card.swapAccount,
                         preferOrganizationScopedDesktop: claudeCards.count > 1
-                            && card.organizationID != nil && !card.usesDesktopCredentials
+                            && card.organizationID != nil && !card.usesDesktopCredentials,
+                        signIn: card.id == signInClaudeCardID ? signIn.claude : nil
                     ),
                     logUsageScanner: scanner,
                     allowsUnattributedPiUsage: card.allowsUnattributedPiUsage
@@ -47,11 +51,14 @@ enum ProviderCatalog {
                 authStore: CodexAuthStore(
                     additionalAuthHomes: codex.plainAuthHomes,
                     writableAuthHomes: Set(codex.plainWritableAuthHomes),
-                    piCredentialSources: codex.plainPiCredentialSources
+                    piCredentialSources: codex.plainPiCredentialSources,
+                    signIn: signIn.codex
                 ),
                 logUsageScanner: CodexLogUsageScanner(additionalHomes: codex.plainAuthHomes)
             ))
         } else {
+            // The OpenUsage sign-in belongs to one card: the default `codex` card, else the first.
+            let signInCodexCardID = codex.cards.first { $0.id == "codex" }?.id ?? codex.cards.first?.id
             providers += codex.cards.map { card in
                 CodexProvider(
                     provider: CodexProvider.makeProvider(id: card.id, displayName: card.displayName),
@@ -59,7 +66,8 @@ enum ProviderCatalog {
                         expectedIdentity: card.identity,
                         additionalAuthHomes: card.authHomes,
                         writableAuthHomes: Set(card.writableAuthHomes),
-                        piCredentialSources: card.piCredentialSources
+                        piCredentialSources: card.piCredentialSources,
+                        signIn: card.id == signInCodexCardID ? signIn.codex : nil
                     ),
                     historyScope: .account(card.identity, codex.historyHomes, claimsPiUsage: card.claimsPiUsage)
                 )
@@ -71,7 +79,7 @@ enum ProviderCatalog {
             CopilotProvider(defaults: defaults),
             CryptoPriceProvider(settings: .load(from: defaults)),
             DevinProvider(),
-            GrokProvider(),
+            GrokProvider(signIn: signIn.grok),
             OllamaProvider(),
             OpenCodeProvider(),
             OpenRouterProvider(),

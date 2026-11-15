@@ -72,12 +72,14 @@ struct ClaudeUsageClient: Sendable {
         self.httpClient = httpClient
     }
 
-    func refreshToken(_ refreshToken: String, config: ClaudeOAuthConfig) async throws -> HTTPResponse {
+    /// `scopes` overrides Claude Code's scope set: an OpenUsage sign-in renews with exactly what it was
+    /// granted, since asking for more on refresh can be refused.
+    func refreshToken(_ refreshToken: String, config: ClaudeOAuthConfig, scopes: String? = nil) async throws -> HTTPResponse {
         let body: [String: Any] = [
             "grant_type": "refresh_token",
             "refresh_token": refreshToken,
             "client_id": config.clientID,
-            "scope": Self.scopes
+            "scope": scopes ?? Self.scopes
         ]
         let bodyData = try JSONSerialization.data(withJSONObject: body)
         return try await httpClient.send(

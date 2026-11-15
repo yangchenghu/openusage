@@ -105,7 +105,13 @@ final class ClaudeProvider: ProviderRuntime {
         pendingLaunchSnapshot = snapshot
     }
 
+    var requiresOpenUsageSignIn: Bool { authStore.signIn != nil }
+
     func hasLocalCredentials() async -> Bool {
+        // A sign-in-gated card is "detected" only by its OpenUsage sign-in, never by Claude Code's login.
+        if let signIn = authStore.signIn {
+            return await loadOffMainActor { (try? signIn.load()) ?? nil } != nil
+        }
         // Never trigger another app's Keychain prompt during first-run detection. Encrypted Desktop
         // material still counts as a local login; the first manual refresh requests access if needed.
         let load = await loadOffMainActor { [authStore] in authStore.loadCredentialSet() }
@@ -134,6 +140,9 @@ final class ClaudeProvider: ProviderRuntime {
                 allowDesktopInteraction: allowDesktopInteraction,
                 forceDesktopFallback: forceDesktopFallback
             )
+        }
+        if let signInError = credentialLoad.signInError {
+            return ProviderSnapshot.error(provider: provider, error: signInError)
         }
         let storedCandidates = credentialLoad.candidates
         let candidates = storedCandidates.filter {
@@ -236,6 +245,10 @@ final class ClaudeProvider: ProviderRuntime {
                     forceDesktopFallback: forceDesktopFallback,
                     previousFallbackError: previousFallbackError
                 )
+            } catch let error as ClaudeAuthError where error.allowsAuthFallback && state.source == .openUsage {
+                // Nothing to fall back to: the sign-in is the only source while it exists.
+                AppLog.warn(LogTag.auth("claude"), "OpenUsage sign-in rejected (\(error))")
+                return ProviderSnapshot.error(provider: provider, error: ClaudeAuthError.signInExpired)
             } catch let error as ClaudeAuthError where error.allowsAuthFallback {
                 AppLog.warn(LogTag.auth("claude"), "\(state.source.label) failed (\(error)); falling back to next source if any")
                 lastFallbackError = error
@@ -380,7 +393,7 @@ final class ClaudeProvider: ProviderRuntime {
 
         var working = state
         defer { state = working }
-        var verificationResponse = try await verifyAccountIfNeeded(credentials: working.oauth)
+        var verificationResponse = try await verifyAccountIfNeeded(credentials: working.oauth, source: working.source)
         let response = try await ProviderAuthRetry.fetch(
             token: working.oauth.accessToken ?? "",
             attempt: { accessToken in
@@ -411,7 +424,7 @@ final class ClaudeProvider: ProviderRuntime {
                     expectedGeneration = expectedGeneration.replacing(working)
                 }
                 // `refreshAccessToken` already moved `working` onto the rotated token.
-                verificationResponse = try await self.verifyAccountIfNeeded(credentials: working.oauth)
+                verificationResponse = try await self.verifyAccountIfNeeded(credentials: working.oauth, source: working.source)
                 return refreshed.accessToken
             },
             connectionFailed: ClaudeUsageError.connectionFailed,
@@ -454,8 +467,14 @@ final class ClaudeProvider: ProviderRuntime {
         return mapped
     }
 
-    private func verifyAccountIfNeeded(credentials: ClaudeOAuth) async throws -> HTTPResponse? {
-        guard let identity = authStore.expectedIdentityKey,
+    /// An OpenUsage sign-in is skipped: the expected identity describes Claude Code's login, while the
+    /// sign-in may deliberately be a different account.
+    private func verifyAccountIfNeeded(
+        credentials: ClaudeOAuth,
+        source: ClaudeCredentialState.Source
+    ) async throws -> HTTPResponse? {
+        guard source != .openUsage,
+              let identity = authStore.expectedIdentityKey,
               let fingerprint = verificationFingerprint(credentials)
         else { return nil }
         let accessToken = credentials.accessToken ?? ""
@@ -637,7 +656,10 @@ final class ClaudeProvider: ProviderRuntime {
         expectedGeneration: ClaudeCredentialGeneration
     ) async throws -> RefreshedAccess {
         AppLog.info(LogTag.auth("claude"), "token refresh attempt")
-        let response = try await usageClient.refreshToken(refreshToken, config: authStore.oauthConfig())
+        let response = try await usageClient.refreshToken(
+            refreshToken, config: authStore.oauthConfig(),
+            scopes: state.source == .openUsage ? ClaudeSignIn.scopes : nil
+        )
         if response.statusCode == 400 || response.statusCode == 401 {
             let body = (try? JSONSerialization.jsonObject(with: response.body)) as? [String: Any]
             let errorCode = body?["error"] as? String ?? body?["error_description"] as? String

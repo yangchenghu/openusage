@@ -41,6 +41,11 @@ protocol ProviderRuntime: AnyObject {
     /// Defaults to the shared `RefreshSetting.interval`; fast-moving sources (market prices) shorten it.
     var refreshInterval: TimeInterval { get }
 
+    /// Whether this provider is turned on by signing in inside OpenUsage (login/logout replaces its
+    /// toggle) rather than by detecting a tool's login on this Mac. Such providers are never switched
+    /// on by detection or Reset All.
+    var requiresOpenUsageSignIn: Bool { get }
+
     /// Hands the provider the snapshot painted from the launch cache, called once at launch and only
     /// when the entry's account stamp matched the card's known identity. Providers whose in-memory
     /// fallback state doesn't survive a relaunch can hold it for their first degraded refresh.
@@ -51,6 +56,8 @@ extension ProviderRuntime {
     func adoptLaunchSnapshot(_ snapshot: ProviderSnapshot) {}
 
     var refreshInterval: TimeInterval { RefreshSetting.interval }
+
+    var requiresOpenUsageSignIn: Bool { false }
 }
 
 /// Run a blocking, `Sendable` credential load off the MainActor.

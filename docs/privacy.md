@@ -11,7 +11,13 @@ your macOS account (owner read and write only). Antigravity's short-lived refres
 to the current Keychain login using a one-way fingerprint; the refresh credential itself is not copied.
 The cache is never used after logout, an account change, or while Keychain access is unavailable.
 
-Cursor is authorized using login beside Cursor in Customize. The browser sign-in uses PKCE and
+Claude, Codex, and Grok are authorized the same way, using login beside each in Customize. Those
+sign-ins use each provider's own browser or device sign-in, keep their tokens in OpenUsage's own
+Keychain item (separate for development and release builds), and never read or write the provider
+tool's login. Logging out deletes OpenUsage's item and turns the provider off. The one-shot `openusage` command may ask once for
+Keychain access to read that item.
+
+Cursor is authorized using login beside Cursor in Customize (its status popover's **Copy Link** opens the sign-in in another browser). The browser sign-in uses PKCE and
 saves its access/refresh tokens in OpenUsage's own macOS Keychain item, separately for development
 and release builds. It does not write to the Cursor app's credentials. Choosing logout deletes
 OpenUsage's item and disables Cursor without falling back to the Cursor app's login.

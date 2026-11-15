@@ -14,6 +14,15 @@ When Grok reports your subscription tier, OpenUsage shows it beside the provider
 
 The weekly shared pool is the limit Grok enforces for unified-billing accounts (the old monthly credits meter is legacy and no longer shown). Accounts that haven't been migrated to unified billing have no weekly pool, so the Weekly tile reads "No data" there.
 
+## Signing in inside OpenUsage
+
+Grok is turned on by signing in inside OpenUsage, like Cursor: click **login** beside Grok in
+Customize. A device code appears beside the button and xAI's device page opens; enter the code there to approve. **Copy Link** copies the device page's address, so you can approve in any browser, even on another device. A successful sign-in turns Grok on and shows **logout**; logging out turns it off.
+While signed out, OpenUsage does not read the provider tool's login on this Mac at all. The tokens
+live in OpenUsage's own Keychain item and renew automatically; if the provider refuses a renewal, the
+card asks you to log in again. OpenUsage never writes to `~/.grok/auth.json`. The **Account** card in the provider's Customize detail shows
+which account is signed in.
+
 ## Where credentials come from
 
 Sign in once with the Grok CLI (`grok login`); OpenUsage reads the same `~/.grok/auth.json`. Access tokens refresh automatically before expiry, and rotated tokens are written back to the file.

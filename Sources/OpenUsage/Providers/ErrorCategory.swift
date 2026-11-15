@@ -54,8 +54,8 @@ protocol CategorizedError: Error {
 extension ClaudeAuthError: CategorizedError {
     var errorCategory: ErrorCategory {
         switch self {
-        case .notLoggedIn: .notLoggedIn
-        case .sessionExpired, .tokenExpired, .desktopTokenExpired, .swapTokenExpired: .authExpired
+        case .notLoggedIn, .notSignedIn: .notLoggedIn
+        case .sessionExpired, .tokenExpired, .desktopTokenExpired, .swapTokenExpired, .signInExpired: .authExpired
         case .invalidOAuthURL, .desktopCredentialsUnavailable: .authInvalid
         case .desktopPermissionRequired: .credentialAccess
         case .credentialsChanged: .other
@@ -76,8 +76,8 @@ extension ClaudeUsageError: CategorizedError {
 extension CodexAuthError: CategorizedError {
     var errorCategory: ErrorCategory {
         switch self {
-        case .notLoggedIn: .notLoggedIn
-        case .sessionExpired, .tokenConflict, .tokenRevoked, .tokenExpired: .authExpired
+        case .notLoggedIn, .notSignedIn: .notLoggedIn
+        case .sessionExpired, .tokenConflict, .tokenRevoked, .tokenExpired, .signInExpired: .authExpired
         case .usageAPIKey: .notAvailable
         case .invalidAuthPayload: .authInvalid
         }
@@ -118,9 +118,9 @@ extension CursorUsageError: CategorizedError {
 extension GrokAuthError: CategorizedError {
     var errorCategory: ErrorCategory {
         switch self {
-        case .notLoggedIn: .notLoggedIn
+        case .notLoggedIn, .notSignedIn: .notLoggedIn
         case .invalidAuth: .authInvalid
-        case .expired: .authExpired
+        case .expired, .signInExpired: .authExpired
         }
     }
 }

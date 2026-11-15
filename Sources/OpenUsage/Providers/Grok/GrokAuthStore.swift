@@ -31,6 +31,10 @@ enum GrokAuthError: Error, LocalizedError, Equatable {
     case notLoggedIn
     case invalidAuth
     case expired
+    /// The OpenUsage sign-in was refused on renewal; only signing in again fixes it.
+    case signInExpired
+    /// Grok is turned on by an OpenUsage sign-in and none exists.
+    case notSignedIn
 
     var errorDescription: String? {
         switch self {
@@ -40,6 +44,10 @@ enum GrokAuthError: Error, LocalizedError, Equatable {
             return "Grok auth invalid. Run `grok login` again."
         case .expired:
             return "Grok auth expired. Run `grok login` again."
+        case .signInExpired:
+            return "Your Grok sign-in expired. Click login beside Grok in Customize."
+        case .notSignedIn:
+            return "Not signed in. Click login beside Grok in Customize."
         }
     }
 }

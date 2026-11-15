@@ -41,8 +41,9 @@ enum FirstRunSeeder {
         providers: [ProviderRuntime],
         enablement: ProviderEnablementStore
     ) -> Task<Void, Never> {
-        // Cursor's list action now requires explicit login; Reset All must not bypass it.
-        let fallbackEligible = providers.filter { !(($0 as? CursorProvider)?.accountSession != nil) }
+        // Login-gated providers (Cursor, Claude, Codex, Grok) need an explicit login; Reset All must not
+        // bypass it. Their detection only reports an OpenUsage sign-in, so the re-probe below is safe.
+        let fallbackEligible = providers.filter { !$0.requiresOpenUsageSignIn }
         let fallback = fallbackProviderIDs.intersection(Set(fallbackEligible.map(\.provider.id)))
         enablement.seedEnabledProviders(fallback)
         AppLog.info(.config, "reset all: seeded providers \(fallback.sorted()); re-probing local credentials")

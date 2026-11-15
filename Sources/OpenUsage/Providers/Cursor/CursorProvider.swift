@@ -67,6 +67,8 @@ final class CursorProvider: ProviderRuntime {
         )
     }
 
+    var requiresOpenUsageSignIn: Bool { accountSession != nil }
+
     func hasLocalCredentials() async -> Bool {
         do {
             if let accountSession { return try await accountSession.loadAuthState() != nil }

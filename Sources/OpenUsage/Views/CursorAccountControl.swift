@@ -43,7 +43,10 @@ struct CursorAccountControl: View {
                             Text("Finish signing in in your browser.")
                         }
                         if session.isSigningIn, let url = session.authorizationURL {
-                            Button("Open Browser Again") { NSWorkspace.shared.open(url) }
+                            HStack(spacing: 12) {
+                                Button("Open Browser Again") { NSWorkspace.shared.open(url) }
+                                CopyLinkButton(url: url)
+                            }
                         }
                     }
                     .font(.caption)

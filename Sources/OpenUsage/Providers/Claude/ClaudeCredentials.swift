@@ -48,6 +48,8 @@ struct ClaudeCredentialState: Hashable, Sendable {
         case desktop
         case swapVault
         case environment
+        /// Signed in inside OpenUsage; tokens live in OpenUsage's own Keychain item.
+        case openUsage
 
         /// Log-safe source kind , NEVER the keychain service name or any token.
         var label: String {
@@ -58,6 +60,7 @@ struct ClaudeCredentialState: Hashable, Sendable {
             case .desktop: "desktop"
             case .swapVault: "swapVault"
             case .environment: "environment"
+            case .openUsage: "openUsage"
             }
         }
     }
@@ -127,4 +130,7 @@ struct ClaudeCredentialGeneration: Equatable, Sendable {
 struct ClaudeCredentialLoad: Sendable {
     var candidates: [ClaudeCredentialState]
     var desktopStatus: ClaudeDesktopCredentialStatus
+    /// Set for a sign-in-gated card that is signed out or whose sign-in couldn't be read. The provider
+    /// surfaces it rather than falling back to Claude Code's login.
+    var signInError: (any Error)? = nil
 }
