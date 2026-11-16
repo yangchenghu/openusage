@@ -4,7 +4,7 @@ import SwiftUI
 /// The dashboard footer's trailing control: a single **Options ⌄** menu button in Liquid Glass. The
 /// earlier split button ("Customize" + separate chevron) confused people — two tap targets in one
 /// capsule read as one — so everything now lives in one obvious menu: Customize / Settings / Share
-/// Screenshot / Check for Updates / Report an Issue / About / Quit. Customize leads because it's the
+/// Screenshot / Report an Issue / About / Quit. Customize leads because it's the
 /// screen users reach for most; Settings stays one click away (and always via ⌘,).
 ///
 /// The capsule is a `.buttonStyle(.plain)` `Menu` with one `interactiveGlass(in: Capsule())` treatment
@@ -25,7 +25,6 @@ import SwiftUI
 struct HeaderView: View {
     @Environment(LayoutStore.self) private var layout
     @Environment(WidgetDataStore.self) private var dataStore
-    @Environment(UpdaterController.self) private var updater
     @Environment(PopoverTransparencyStore.self) private var transparency
     @Environment(\.colorScheme) private var colorScheme
     /// The screen this footer belongs to — each page carries its own — so the control shows on the
@@ -77,12 +76,10 @@ struct HeaderView: View {
     }
 
     /// The menu's items, mirroring their in-popover entry points. Customize leads, then Settings.
-    /// `autoenablesItems` has no SwiftUI equivalent, so the Check for Updates item disables itself when
-    /// Sparkle can't currently check — e.g. dev builds with no feed, or while a check is already in
-    /// flight. Customize and Settings carry their key equivalents so the menu shows the shortcuts: when
+    /// Customize and Settings carry their key equivalents so the menu shows the shortcuts: when
     /// the menu is open the items handle them; when it's closed the `PopoverKeyReader` monitor
     /// handles (and consumes) them first, so the equivalents can't double-fire. Same split as the Quit
-    /// ⌘Q item below.
+    /// ⌘Q item below. In-app update checks are off, so this menu has no Check for Updates item.
     @ViewBuilder
     private var menuItems: some View {
         Button { toggle(.customize) } label: {
@@ -99,10 +96,6 @@ struct HeaderView: View {
 
         shareScreenshotMenu
 
-        Button { updater.checkForUpdates() } label: {
-            Label("Check for Updates…", systemImage: "arrow.triangle.2.circlepath")
-        }
-        .disabled(!updater.canCheckForUpdates)
 
         Divider()
 

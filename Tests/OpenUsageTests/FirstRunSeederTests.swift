@@ -1,26 +1,25 @@
 import XCTest
 @testable import OpenUsage
 
-/// Covers fresh-install seeding (nothing on until the welcome screen; existing installs keep the legacy
-/// all-on default untouched) and the Customize "Reset All" reseed: the fallback set lands synchronously,
+/// Covers fresh-install seeding (nothing on; existing installs keep the legacy all-on default
+/// untouched) and the Customize "Reset All" reseed: the fallback set lands synchronously,
 /// the detected set replaces it once the local credential probe finishes, and a user's toggle during the
 /// probe wins over detection.
 @MainActor
 final class FirstRunSeederTests: XCTestCase {
     func testFreshInstallStartsWithNothingOnAndProbesNothing() {
         let enablement = ProviderEnablementStore(defaults: makeDefaults("fresh"))
-        let onboarding = OnboardingStore(defaults: makeDefaults("fresh-onboarding"))
         let providers = ["claude", "codex", "cursor", "grok"].map { stub($0, hasCredentials: true) }
 
         FirstRunSeeder.seedIfNeeded(
             isFreshInstall: true, providers: providers,
-            enablement: enablement, onboarding: onboarding
+            enablement: enablement
         )
 
-        // A probe can read the Keychain, so nothing is probed before the user picks on the welcome screen.
+        // A probe can read the Keychain, so a fresh install does not probe before the user turns
+        // providers on in Customize.
         XCTAssertEqual(enablement.enabledIDs, [])
         XCTAssertEqual(providers.map(\.probeCount), [0, 0, 0, 0])
-        XCTAssertTrue(onboarding.isCustomizeHintPending)
         // Every provider shipping today is baselined as "seen", so `NewProviderSeeder` only ever
         // probes providers added in a later release.
         XCTAssertEqual(enablement.knownIDs, ["claude", "codex", "cursor", "grok"])
@@ -28,16 +27,14 @@ final class FirstRunSeederTests: XCTestCase {
 
     func testExistingInstallIsNeverSeeded() {
         let enablement = ProviderEnablementStore(defaults: makeDefaults("existing"))
-        let onboarding = OnboardingStore(defaults: makeDefaults("existing-onboarding"))
 
         FirstRunSeeder.seedIfNeeded(
             isFreshInstall: false, providers: [stub("claude", hasCredentials: true)],
-            enablement: enablement, onboarding: onboarding
+            enablement: enablement
         )
 
         XCTAssertNil(enablement.enabledIDs, "an existing install keeps legacy all-on semantics")
         XCTAssertTrue(enablement.isEnabled("grok"))
-        XCTAssertFalse(onboarding.isCustomizeHintPending, "existing installs never see the hint card")
     }
 
     func testAlreadySeededStoreIsNotReseeded() {
@@ -46,11 +43,10 @@ final class FirstRunSeederTests: XCTestCase {
         let defaults = makeDefaults("idempotent")
         let enablement = ProviderEnablementStore(defaults: defaults)
         enablement.seedEnabledProviders(["grok"])
-        let onboarding = OnboardingStore(defaults: makeDefaults("idempotent-onboarding"))
 
         FirstRunSeeder.seedIfNeeded(
             isFreshInstall: true, providers: [stub("claude", hasCredentials: true)],
-            enablement: enablement, onboarding: onboarding
+            enablement: enablement
         )
 
         XCTAssertEqual(enablement.enabledIDs, ["grok"])
@@ -120,20 +116,6 @@ final class FirstRunSeederTests: XCTestCase {
         XCTAssertEqual(detected, Set(ids), "all probes must be in flight at once, not one after another")
     }
 
-    // MARK: - OnboardingStore persistence
-
-    func testCustomizeHintFlagPersistsAcrossInstances() {
-        let defaults = makeDefaults("hint-persist")
-        let store = OnboardingStore(defaults: defaults)
-        XCTAssertFalse(store.isCustomizeHintPending)
-
-        store.markCustomizeHintPending()
-        XCTAssertTrue(OnboardingStore(defaults: defaults).isCustomizeHintPending)
-
-        store.dismissCustomizeHint()
-        XCTAssertFalse(store.isCustomizeHintPending)
-        XCTAssertFalse(OnboardingStore(defaults: defaults).isCustomizeHintPending)
-    }
 
     // MARK: - Helpers
 

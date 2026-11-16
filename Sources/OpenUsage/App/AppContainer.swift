@@ -28,9 +28,6 @@ final class AppContainer {
     /// plus the live capture signal. Read by `StatusItemImageUpdater` to swap the strip for the
     /// wordmark while the screen is shared or recorded.
     let privacy: MenuBarPrivacyStore
-    /// One-time onboarding state (the first-run Customize hint card). Only ever marked pending by
-    /// `FirstRunSeeder` on a fresh install, so existing installs never see the card.
-    let onboarding: OnboardingStore
     /// Claims Codex reset credits and Claude reset grants from the resets popover (the app's only
     /// provider-API writes), keyed by provider id. Each service shares its card's credentials. The view
     /// tree selects the matching service from `\.resetClaims` for each card's resets popover.
@@ -40,12 +37,12 @@ final class AppContainer {
     let signInSessions: [String: SignInSession]
     /// Each login-gated card's login method (local login vs. OpenUsage sign-in).
     let signInModes: SignInModeStore
-    /// The provider runtimes, kept so on-demand credential detection (the welcome screen and the
-    /// Customize "Reset All" reseed) can re-probe `hasLocalCredentials()` on every card.
+    /// The provider runtimes, kept so on-demand credential detection (Customize "Reset All" and
+    /// `NewProviderSeeder`) can re-probe `hasLocalCredentials()` on every card.
     let providers: [ProviderRuntime]
     /// Read-only usage API on 127.0.0.1:6736 for other local apps (silently off when the port is taken).
     private let localAPI: LocalUsageServer
-    /// `nil` until `startRefreshing()`, which the welcome screen delays until the user has picked providers.
+    /// `nil` until `startRefreshing()`, which runs once the status item is up.
     @ObservationIgnored private var refreshTask: Task<Void, Never>?
     /// The new-provider credential-detection pass (see `NewProviderSeeder`); `nil` unless this launch is
     /// the first with a provider the install has never seen.
@@ -106,14 +103,12 @@ final class AppContainer {
         enablement.onChange = { [weak dataStore] in
             dataStore?.providerEnablementDidChange()
         }
-        // Fresh installs start with nothing on; the welcome screen turns on the user's picks. No-op on
+        // Fresh installs start with nothing on. Sign-ins are chosen in Customize. No-op on
         // every later launch.
-        let onboarding = OnboardingStore()
         FirstRunSeeder.seedIfNeeded(
             isFreshInstall: isFreshInstall,
             providers: providers,
-            enablement: enablement,
-            onboarding: onboarding
+            enablement: enablement
         )
         // Providers added by an update get the same credential detection on their first launch — enabled
         // only when the user actually has the tool. Runs every launch; a no-op unless the registry has a
@@ -123,7 +118,6 @@ final class AppContainer {
             enablement: enablement
         )
         self.providers = providers
-        self.onboarding = onboarding
         self.registry = registry
         self.enablement = enablement
         self.apiKeyProviders = apiKeyProviders

@@ -6,10 +6,8 @@ import Sparkle
 
 /// Wraps Sparkle's standard updater so the rest of the app stays Sparkle-agnostic.
 ///
-/// The updater starts whenever the app runs from a packaged bundle that declares a `SUFeedURL`. Only the
-/// signed release build bakes one in, so the Settings "Updates" section appears there alone. A bare
-/// `swift run` and the in-place dev build ship no feed, leaving the updater dormant and the section
-/// hidden. See `docs/updates.md` for the user-facing behavior.
+/// In-app checks stay off. `start()` never contacts a feed, so a bundled `SUFeedURL` cannot install
+/// an upstream build. Settings hides Updates because the updater never becomes active.
 @MainActor
 @Observable
 final class UpdaterController {
@@ -60,44 +58,9 @@ final class UpdaterController {
         self.betaChannelEnabled = UserDefaults.standard.bool(forKey: Self.betaChannelDefaultsKey)
     }
 
-    /// Starts the updater if (and only if) this build ships an appcast feed. Safe to call once at launch.
+    /// Does not contact an update feed. A bundled `SUFeedURL` is ignored and Sparkle never starts.
     func start() {
-        guard controller == nil else { return }
-        guard Bundle.main.object(forInfoDictionaryKey: "SUFeedURL") != nil else {
-            AppLog.info(.updates, "disabled: no SUFeedURL (unbundled or dev build)")
-            return
-        }
-        // The driver delegate's callbacks run on the main thread but the delegate itself is
-        // nonisolated (see below); these hops publish the banner state back onto this controller.
-        userDriverDelegate.onUpdateFound = { [weak self] version in
-            self?.availableUpdateVersion = version
-            AppLog.info(.updates, "scheduled check found \(version); showing in-app banner")
-        }
-        userDriverDelegate.onUpdateResolved = { [weak self] in
-            self?.availableUpdateVersion = nil
-        }
-        userDriverDelegate.onUpdateWillShow = { [weak self] in
-            self?.presentationController.bringToFront(reason: "Sparkle will show update")
-        }
-        userDriverDelegate.onUpdateSessionFinished = { [weak self] in
-            self?.presentationController.returnToMenuBar()
-        }
-        let controller = SPUStandardUpdaterController(
-            startingUpdater: true,
-            updaterDelegate: channelDelegate,
-            userDriverDelegate: userDriverDelegate
-        )
-        self.controller = controller
-        isActive = true
-        // Bridge Sparkle's KVO property into our `@Observable` state so SwiftUI tracks button enablement.
-        // Delivery is forced onto the main queue so the main-actor mutation below is always valid.
-        canCheckForUpdates = controller.updater.canCheckForUpdates
-        canCheckObservation = controller.updater.publisher(for: \.canCheckForUpdates)
-            .receive(on: DispatchQueue.main)
-            .sink { [weak self] value in
-                MainActor.assumeIsolated { self?.canCheckForUpdates = value }
-            }
-        AppLog.info(.updates, "started (feed present)")
+        AppLog.info(.updates, "disabled: in-app update checks are off")
     }
 
     /// Restores the update preferences to their defaults — the Settings "Reset All Settings" path:

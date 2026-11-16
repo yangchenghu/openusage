@@ -2,7 +2,12 @@
 
 本分支基于 0.7.16 维护，背景见 [README](README.md#本分支的背景与目标)。上游正式版本的发版记录见 [CHANGELOG.md](CHANGELOG.md)。
 
-以下为本地维护改动，尚未发布新的版本号。
+以下为本地维护改动。本地安装包版本为 **0.7.17**（`dist/OpenUsage-0.7.17.dmg`）。未推送 tag，也不会进入上游 Sparkle。
+
+## 2026-11-16 — 启动不再列出自动配置，并关闭应用内更新检测
+
+- 启动不再打开欢迎页，也不再显示「本机已检测到哪些登录」。全新安装直接进入菜单栏，厂商默认关闭，在 Customize 里自行打开并选择登录方式。
+- 菜单栏弹窗移除 **A New OpenUsage Is Coming**，以及检测到新版本后的安装提示。应用不再请求更新接口，Options 里也没有 Check for Updates，避免点进去升到官方版本。
 
 ## 2026-11-16 — 登录方式切换与登录信息导入导出
 
@@ -63,4 +68,5 @@
 - 用量兼容修复阶段：`swift test --filter 'Cursor|Antigravity|Grok|ZAI'`，270 项通过。
 - 独立授权与日志脱敏阶段：`swift test --filter 'Cursor|LogRedaction'`，112 项通过。
 - Customize 列表登录与开关联动：`swift test --filter 'Cursor|FirstRunSeeder|ProviderEnablement'`，114 项通过。
+- 关闭启动自动配置提示与应用内更新检测：`swift test --filter 'FirstRunSeederTests|FirstLaunchSetupTests'`，15 项通过；开发包已重新构建并启动。
 - 开发应用已通过构建、签名检查及启动验证。上述测试使用模拟响应和临时凭证；真实账号能否恢复用量读取，仍需完成浏览器授权后验证，界面点击检查尚未完成。

@@ -1,11 +1,11 @@
 import Foundation
 
-/// Fresh-install provider setup and the local credential detection shared with the welcome screen,
-/// `NewProviderSeeder`, and the Customize "Reset All" reseed.
+/// Fresh-install provider setup and the local credential detection shared with `NewProviderSeeder`
+/// and the Customize "Reset All" reseed.
 ///
-/// A fresh install starts with no providers on: the welcome screen (`FirstLaunchSetup`) detects the
-/// tools on this Mac and turns on the ones the user picks. Existing installs keep their all-on legacy
-/// default and are never touched.
+/// A fresh install starts with no providers on. The user turns providers on in Customize; launch does
+/// not list sign-ins found on this Mac. Existing installs keep their all-on legacy default and are
+/// never touched.
 @MainActor
 enum FirstRunSeeder {
     /// The established providers (see AGENTS.md "## Providers"), shown when detection finds nothing.
@@ -16,8 +16,7 @@ enum FirstRunSeeder {
     static func seedIfNeeded(
         isFreshInstall: Bool,
         providers: [ProviderRuntime],
-        enablement: ProviderEnablementStore,
-        onboarding: OnboardingStore
+        enablement: ProviderEnablementStore
     ) {
         guard isFreshInstall, enablement.enabledIDs == nil else { return }
 
@@ -25,8 +24,7 @@ enum FirstRunSeeder {
         // so `NewProviderSeeder` only ever probes providers added in a later release.
         enablement.registerKnownProviders(Set(providers.map(\.provider.id)))
         enablement.seedEnabledProviders([])
-        onboarding.markCustomizeHintPending()
-        AppLog.info(.config, "first run: no providers on until the welcome screen")
+        AppLog.info(.config, "first run: no providers on; enable them in Customize")
     }
 
     /// Re-runs first-launch detection on demand for the Customize "Reset All" action. Unlike first-run
