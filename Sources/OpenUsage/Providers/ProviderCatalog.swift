@@ -17,7 +17,9 @@ enum ProviderCatalog {
         // The OpenUsage sign-in belongs to one card: the default `claude` card, else the first.
         let signInClaudeCardID = claudeCards.first { $0.id == "claude" }?.id ?? claudeCards.first?.id
         if claudeCards.isEmpty {
-            providers = [ClaudeProvider(authStore: ClaudeAuthStore(signIn: signIn.claude))]
+            providers = [ClaudeProvider(authStore: ClaudeAuthStore(
+                signIn: signIn.claude, signInMode: .stored(providerID: "claude", defaults: defaults)
+            ))]
         } else {
             providers = claudeCards.map { card in
                 let identity = claudeIdentityKeys[card.id] ?? card.identityKey
@@ -39,7 +41,8 @@ enum ProviderCatalog {
                         swapAccount: card.swapAccount,
                         preferOrganizationScopedDesktop: claudeCards.count > 1
                             && card.organizationID != nil && !card.usesDesktopCredentials,
-                        signIn: card.id == signInClaudeCardID ? signIn.claude : nil
+                        signIn: card.id == signInClaudeCardID ? signIn.claude : nil,
+                        signInMode: .stored(providerID: card.id, defaults: defaults)
                     ),
                     logUsageScanner: scanner,
                     allowsUnattributedPiUsage: card.allowsUnattributedPiUsage
@@ -52,7 +55,8 @@ enum ProviderCatalog {
                     additionalAuthHomes: codex.plainAuthHomes,
                     writableAuthHomes: Set(codex.plainWritableAuthHomes),
                     piCredentialSources: codex.plainPiCredentialSources,
-                    signIn: signIn.codex
+                    signIn: signIn.codex,
+                    signInMode: .stored(providerID: "codex", defaults: defaults)
                 ),
                 logUsageScanner: CodexLogUsageScanner(additionalHomes: codex.plainAuthHomes)
             ))
@@ -67,19 +71,20 @@ enum ProviderCatalog {
                         additionalAuthHomes: card.authHomes,
                         writableAuthHomes: Set(card.writableAuthHomes),
                         piCredentialSources: card.piCredentialSources,
-                        signIn: card.id == signInCodexCardID ? signIn.codex : nil
+                        signIn: card.id == signInCodexCardID ? signIn.codex : nil,
+                        signInMode: .stored(providerID: card.id, defaults: defaults)
                     ),
                     historyScope: .account(card.identity, codex.historyHomes, claimsPiUsage: card.claimsPiUsage)
                 )
             }
         }
         providers += [
-            CursorProvider(accountSession: CursorAccountSession()),
+            CursorProvider(accountSession: CursorAccountSession(), signInMode: .stored(providerID: "cursor", defaults: defaults)),
             AntigravityProvider(),
             CopilotProvider(defaults: defaults),
             CryptoPriceProvider(settings: .load(from: defaults)),
             DevinProvider(),
-            GrokProvider(signIn: signIn.grok),
+            GrokProvider(signIn: signIn.grok, signInMode: .stored(providerID: "grok", defaults: defaults)),
             OllamaProvider(),
             OpenCodeProvider(),
             OpenRouterProvider(),

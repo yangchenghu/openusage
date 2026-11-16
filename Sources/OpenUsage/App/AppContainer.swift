@@ -38,6 +38,8 @@ final class AppContainer {
     /// In-app sign-ins keyed by the provider card they belong to (Claude, Codex, Grok). Cursor keeps its
     /// own `CursorAccountSession`.
     let signInSessions: [String: SignInSession]
+    /// Each login-gated card's login method (local login vs. OpenUsage sign-in).
+    let signInModes: SignInModeStore
     /// The provider runtimes, kept so on-demand credential detection (the welcome screen and the
     /// Customize "Reset All" reseed) can re-probe `hasLocalCredentials()` on every card.
     let providers: [ProviderRuntime]
@@ -150,7 +152,11 @@ final class AppContainer {
             })
         }
         self.resetClaims = resetClaims
-        self.signInSessions = Self.makeSignInSessions(providers: providers, dataStore: dataStore, enablement: enablement)
+        let signInModes = SignInModeStore(providerIDs: registry.providers.map(\.id))
+        self.signInModes = signInModes
+        self.signInSessions = Self.makeSignInSessions(
+            providers: providers, dataStore: dataStore, enablement: enablement, modes: signInModes
+        )
 
         self.transparency = PopoverTransparencyStore()
         self.privacy = MenuBarPrivacyStore()
@@ -168,60 +174,7 @@ final class AppContainer {
         // effectively always is. Notification authorization is requested the first time a trigger is
         // turned on in Settings, not at launch — triggers default off. No-op under tests.
         AppNotifications.shared.registerAsDelegate()
-        if let cursor = providers.first(where: { $0.provider.id == "cursor" }) as? CursorProvider,
-           let session = cursor.accountSession {
-            session.onAuthenticationChanged = { [weak enablement] signedIn in
-                enablement?.setEnabled(signedIn, for: "cursor")
-            }
-            do {
-                _ = try await session.loadAuthState()
-                enablement.setEnabled(session.account != nil, for: "cursor")
-            } catch {
-                enablement.setEnabled(false, for: "cursor")
-                AppLog.error(LogTag.auth("cursor"), "could not restore Cursor sign-in; keeping the provider off")
-            }
-        }
-    }
-
-    /// One session per provider card that holds a sign-in store. Like Cursor, the sign-in is the
-    /// provider's on/off switch: signing in turns it on and refetches with the new account, signing out
-    /// turns it off, and each launch sets it from the saved sign-in. The previous account's cached
-    /// usage is dropped on every change.
-    private static func makeSignInSessions(
-        providers: [ProviderRuntime],
-        dataStore: WidgetDataStore,
-        enablement: ProviderEnablementStore
-    ) -> [String: SignInSession] {
-        var sessions: [SignInSession] = []
-        if let claude = providers.compactMap({ $0 as? ClaudeProvider }).first(where: { $0.authStore.signIn != nil }),
-           let store = claude.authStore.signIn {
-            sessions.append(SignInSession(providerID: claude.provider.id, store: store, signIn: ClaudeSignIn()))
-        }
-        if let codex = providers.compactMap({ $0 as? CodexProvider }).first(where: { $0.authStore.signIn != nil }),
-           let store = codex.authStore.signIn {
-            sessions.append(SignInSession(providerID: codex.provider.id, store: store, signIn: CodexSignIn()))
-        }
-        if let grok = providers.compactMap({ $0 as? GrokProvider }).first, let store = grok.signIn {
-            sessions.append(SignInSession(providerID: grok.provider.id, store: store, signIn: GrokSignIn()))
-        }
-        for session in sessions {
-            let id = session.providerID
-            session.onAccountChanged = { [weak dataStore, weak enablement] signedIn in
-                dataStore?.providerAccountDidChange(id)
-                enablement?.setEnabled(signedIn, for: id)
-                if signedIn { await dataStore?.refresh(providerID: id, force: true) }
-            }
-            Task { [weak enablement] in
-                await session.load()
-                // An unreadable sign-in (Keychain error) keeps the provider off; the row shows the error.
-                enablement?.setEnabled(session.isSignedIn, for: id)
-                if session.errorMessage != nil {
-                    AppLog.error(LogTag.auth(id), "could not restore OpenUsage sign-in; keeping the provider off")
-                }
-            }
-        }
-        AppLog.info(.config, "login-gated cards: \(sessions.map(\.providerID).sorted())")
-        return Dictionary(uniqueKeysWithValues: sessions.map { ($0.providerID, $0) })
+        await restoreLoginMethods()
     }
 
     deinit {

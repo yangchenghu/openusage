@@ -16,9 +16,13 @@ final class GrokProvider: ProviderRuntime {
     let logUsageScanner: GrokLogUsageScanner
     let now: @Sendable () -> Date
     let pricing: @Sendable () async -> ModelPricing
-    /// OpenUsage's own sign-in. While it holds an account it is the only source: `~/.grok/auth.json`
+    /// OpenUsage's own sign-in store, whichever login method is selected.
+    let signInStore: (any SignedInAccountStoring)?
+    /// Whether Grok currently uses that sign-in (`SignInMode.openUsage`) or the Grok CLI's login.
+    let signInMode: SignInModeReader
+    /// The sign-in while it is the selected method. Then it is the only source: `~/.grok/auth.json`
     /// is neither read nor rewritten.
-    let signIn: (any SignedInAccountStoring)?
+    var signIn: (any SignedInAccountStoring)? { signInMode.usesSignIn ? signInStore : nil }
 
     init(
         authStore: GrokAuthStore = GrokAuthStore(),
@@ -26,9 +30,11 @@ final class GrokProvider: ProviderRuntime {
         logUsageScanner: GrokLogUsageScanner = GrokLogUsageScanner(),
         now: @escaping @Sendable () -> Date = Date.init,
         pricing: @escaping @Sendable () async -> ModelPricing = { await ModelPricingStore.shared.current() },
-        signIn: (any SignedInAccountStoring)? = nil
+        signIn: (any SignedInAccountStoring)? = nil,
+        signInMode: SignInModeReader = .always
     ) {
-        self.signIn = signIn
+        self.signInStore = signIn
+        self.signInMode = signInMode
         self.authStore = authStore
         self.usageClient = usageClient
         self.logUsageScanner = logUsageScanner

@@ -85,9 +85,13 @@ struct ClaudeAuthStore: Sendable {
     let desktopOnly: Bool
     let swapAccount: ClaudeSwapAccount?
     let preferOrganizationScopedDesktop: Bool
-    /// OpenUsage's own sign-in for this card. While it holds an account it is the only source: Claude
-    /// Code's Keychain, its credentials file, and Claude Desktop are never read (no prompts).
-    let signIn: (any SignedInAccountStoring)?
+    /// OpenUsage's own sign-in store for this card, whichever login method is selected.
+    let signInStore: (any SignedInAccountStoring)?
+    /// Whether the card currently uses that sign-in (`SignInMode.openUsage`) or Claude Code's login.
+    let signInMode: SignInModeReader
+    /// The sign-in while it is the selected method. Then it is the only source: Claude Code's Keychain,
+    /// its credentials file, and Claude Desktop are never read (no prompts).
+    var signIn: (any SignedInAccountStoring)? { signInMode.usesSignIn ? signInStore : nil }
 
     init(
         environment: EnvironmentReading = ProcessEnvironmentReader(),
@@ -100,6 +104,7 @@ struct ClaudeAuthStore: Sendable {
         swapAccount: ClaudeSwapAccount? = nil,
         preferOrganizationScopedDesktop: Bool = false,
         signIn: (any SignedInAccountStoring)? = nil,
+        signInMode: SignInModeReader = .always,
         now: @escaping @Sendable () -> Date = Date.init
     ) {
         self.environment = environment
@@ -111,7 +116,8 @@ struct ClaudeAuthStore: Sendable {
         self.desktopOnly = desktopOnly
         self.swapAccount = swapAccount
         self.preferOrganizationScopedDesktop = preferOrganizationScopedDesktop
-        self.signIn = signIn
+        self.signInStore = signIn
+        self.signInMode = signInMode
         self.now = now
     }
 

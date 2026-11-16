@@ -148,7 +148,7 @@ struct ReorderLiftPreview: View {
     }
 
     private func isLoginGated(_ providerID: String) -> Bool {
-        container.providers.first { $0.provider.id == providerID }?.requiresOpenUsageSignIn ?? false
+        container.usesOpenUsageSignIn(providerID)
     }
 
     private func customizeMetricPreview(_ title: String) -> some View {

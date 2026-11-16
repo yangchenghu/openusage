@@ -58,6 +58,7 @@ struct SettingsScreen: View {
             usageDisplaySection
             notificationsSection
             privacySection
+            SignInTransferSection()
             commandLineSection
             advancedSection
             updatesSection

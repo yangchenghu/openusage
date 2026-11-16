@@ -13,7 +13,12 @@ final class CursorProvider: ProviderRuntime {
     )
 
     let authStore: CursorAuthStore
-    let accountSession: CursorAccountSession?
+    /// OpenUsage's own Cursor login, whichever login method is selected.
+    let signInSession: CursorAccountSession?
+    /// Whether Cursor currently uses that login (`SignInMode.openUsage`) or Cursor's app/CLI login.
+    let signInMode: SignInModeReader
+    /// The OpenUsage login while it is the selected method; then it is the only source.
+    var accountSession: CursorAccountSession? { signInMode.usesSignIn ? signInSession : nil }
     let usageClient: CursorUsageClient
     let now: @Sendable () -> Date
     let pricing: @Sendable () async -> ModelPricing
@@ -23,6 +28,7 @@ final class CursorProvider: ProviderRuntime {
     init(
         authStore: CursorAuthStore = CursorAuthStore(),
         accountSession: CursorAccountSession? = nil,
+        signInMode: SignInModeReader = .always,
         usageClient: CursorUsageClient = CursorUsageClient(),
         now: @escaping @Sendable () -> Date = Date.init,
         pricing: @escaping @Sendable () async -> ModelPricing = { await ModelPricingStore.shared.current() },
@@ -30,7 +36,8 @@ final class CursorProvider: ProviderRuntime {
         usageHistoryStore: CursorUsageHistoryStore = CursorUsageHistoryStore()
     ) {
         self.authStore = authStore
-        self.accountSession = accountSession
+        self.signInSession = accountSession
+        self.signInMode = signInMode
         self.usageClient = usageClient
         self.now = now
         self.pricing = pricing

@@ -11,7 +11,7 @@ your macOS account (owner read and write only). Antigravity's short-lived refres
 to the current Keychain login using a one-way fingerprint; the refresh credential itself is not copied.
 The cache is never used after logout, an account change, or while Keychain access is unavailable.
 
-Claude, Codex, and Grok are authorized the same way, using login beside each in Customize. Those
+When Claude, Codex, or Grok is set to **OpenUsage Sign-In**, it is authorized the same way, using login beside it in Customize. Those
 sign-ins use each provider's own browser or device sign-in, keep their tokens in OpenUsage's own
 Keychain item (separate for development and release builds), and never read or write the provider
 tool's login. Logging out deletes OpenUsage's item and turns the provider off. The one-shot `openusage` command may ask once for
@@ -21,6 +21,12 @@ Cursor is authorized using login beside Cursor in Customize (its status popover'
 saves its access/refresh tokens in OpenUsage's own macOS Keychain item, separately for development
 and release builds. It does not write to the Cursor app's credentials. Choosing logout deletes
 OpenUsage's item and disables Cursor without falling back to the Cursor app's login.
+
+**Sign-In Transfer** (Settings) exports these OpenUsage sign-ins (never a tool's own login) to a file
+you save, encrypted with AES-GCM under a key derived from a password you choose; nothing is uploaded.
+Importing the file on another Mac saves the sign-ins into that Mac's OpenUsage Keychain items. Because
+providers renew sign-ins with single-use tokens, using the same sign-in on two Macs at once can sign
+one of them out.
 
 Claude Desktop access is strictly read-only. OpenUsage may ask macOS for permission to use the
 `Claude Safe Storage` Keychain item so it can decrypt Desktop's current access token. It never uses

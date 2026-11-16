@@ -30,9 +30,11 @@ If Codex reports only a 7-day window, it maps to Weekly without inventing a 5-ho
 
 ## Signing in inside OpenUsage
 
-Codex is turned on by signing in inside OpenUsage, like Cursor: click **login** beside Codex in
+By default Codex uses **Local Login**: it reads the Codex CLI's login on this Mac and has a normal toggle.
+Set **Login Method** to **OpenUsage Sign-In** in Codex's Customize detail to sign in inside OpenUsage instead
+(the sign-in can then be moved to another Mac from Settings → Sign-In Transfer). Then click **login** beside Codex in
 Customize. Your browser opens ChatGPT's sign-in page and returns to OpenUsage on `localhost:1455`. If that port is busy (for example while `codex login` runs), a device code appears to enter on the page that opens instead. **Copy Link** copies the sign-in page's address to open in another browser; from a browser on another device, paste the `localhost:1455/auth/callback?code=…` address it lands on back into the code field. A successful sign-in turns Codex on and shows **logout**; logging out turns it off.
-While signed out, OpenUsage does not read the provider tool's login on this Mac at all. The tokens
+While set to OpenUsage Sign-In and signed out, OpenUsage does not read the provider tool's login on this Mac at all. The tokens
 live in OpenUsage's own Keychain item and renew automatically; if the provider refuses a renewal, the
 card asks you to log in again. With several Codex cards, only the default card is login-gated. The **Account** card in the provider's Customize detail shows
 which account is signed in.

@@ -119,6 +119,21 @@ final class CursorAccountSession {
         onAuthenticationChanged?(false)
     }
 
+    /// Saves a login exported from another Mac as OpenUsage's Cursor login. The caller turns Cursor on.
+    func adopt(_ imported: CursorAccount) async throws {
+        revision += 1
+        try await vault.save(imported)
+        account = imported
+        loaded = true
+        revision += 1
+        membershipReadAt = nil
+        membership = nil
+        errorMessage = nil
+        persistenceWarning = nil
+        needsPersistence = false
+        AppLog.info(LogTag.auth("cursor"), "imported an OpenUsage Cursor login")
+    }
+
     func renew(_ state: CursorAuthState, client: CursorUsageClient) async throws -> String {
         guard let current = account, current.accessToken == state.accessToken else { throw CancellationError() }
         let expectedRevision = revision

@@ -52,9 +52,11 @@ also use a reset with `/rate-limit-options` in Claude Code.
 
 ## Signing in inside OpenUsage
 
-Claude is turned on by signing in inside OpenUsage, like Cursor: click **login** beside Claude in
+By default Claude uses **Local Login**: it reads Claude Code's login on this Mac and has a normal toggle.
+Set **Login Method** to **OpenUsage Sign-In** in Claude's Customize detail to sign in inside OpenUsage instead
+(the sign-in can then be moved to another Mac from Settings → Sign-In Transfer). Then click **login** beside Claude in
 Customize. Your browser opens Claude's sign-in page; approve it and OpenUsage picks the result up automatically. If the page shows a code instead, open the status icon beside the button and paste it there. **Copy Link** copies the sign-in page's address to open in another browser; from a browser on another device, paste the address it lands on (`localhost/callback?code=…`) back into the code field. A successful sign-in turns Claude on and shows **logout**; logging out turns it off.
-While signed out, OpenUsage does not read the provider tool's login on this Mac at all. The tokens
+While set to OpenUsage Sign-In and signed out, OpenUsage does not read the provider tool's login on this Mac at all. The tokens
 live in OpenUsage's own Keychain item and renew automatically; if the provider refuses a renewal, the
 card asks you to log in again. The account can differ from Claude Code's. With several Claude cards, only the default card is login-gated; the others keep reading their own logins. The **Account** card in the provider's Customize detail shows
 which account is signed in.

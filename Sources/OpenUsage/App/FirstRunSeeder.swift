@@ -41,8 +41,8 @@ enum FirstRunSeeder {
         providers: [ProviderRuntime],
         enablement: ProviderEnablementStore
     ) -> Task<Void, Never> {
-        // Login-gated providers (Cursor, Claude, Codex, Grok) need an explicit login; Reset All must not
-        // bypass it. Their detection only reports an OpenUsage sign-in, so the re-probe below is safe.
+        // Cards set to OpenUsage Sign-In (Cursor, Claude, Codex, Grok) need an explicit login; Reset All
+        // must not bypass it. Their detection only reports an OpenUsage sign-in, so the re-probe below is safe.
         let fallbackEligible = providers.filter { !$0.requiresOpenUsageSignIn }
         let fallback = fallbackProviderIDs.intersection(Set(fallbackEligible.map(\.provider.id)))
         enablement.seedEnabledProviders(fallback)

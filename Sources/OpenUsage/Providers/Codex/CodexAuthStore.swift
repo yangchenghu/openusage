@@ -117,8 +117,12 @@ struct CodexAuthStore: Sendable {
     /// write back. Empty for the plain card, which writes wherever it reads.
     var writableAuthHomes: Set<String>
     var piCredentialSources: [CodexPiCredentialSource]
-    /// OpenUsage's own sign-in for this card. While it holds an account it is the only source.
-    var signIn: (any SignedInAccountStoring)?
+    /// OpenUsage's own sign-in store for this card, whichever login method is selected.
+    var signInStore: (any SignedInAccountStoring)?
+    /// Whether the card currently uses that sign-in (`SignInMode.openUsage`) or the Codex CLI's login.
+    var signInMode: SignInModeReader
+    /// The sign-in while it is the selected method; then it is the only source.
+    var signIn: (any SignedInAccountStoring)? { signInMode.usesSignIn ? signInStore : nil }
 
     init(
         environment: EnvironmentReading = ProcessEnvironmentReader(),
@@ -129,7 +133,8 @@ struct CodexAuthStore: Sendable {
         additionalAuthHomes: [String] = [],
         writableAuthHomes: Set<String> = [],
         piCredentialSources: [CodexPiCredentialSource] = [],
-        signIn: (any SignedInAccountStoring)? = nil
+        signIn: (any SignedInAccountStoring)? = nil,
+        signInMode: SignInModeReader = .always
     ) {
         self.environment = environment
         self.files = files
@@ -139,7 +144,8 @@ struct CodexAuthStore: Sendable {
         self.additionalAuthHomes = additionalAuthHomes
         self.writableAuthHomes = writableAuthHomes
         self.piCredentialSources = piCredentialSources
-        self.signIn = signIn
+        self.signInStore = signIn
+        self.signInMode = signInMode
     }
 
     /// The OpenUsage sign-in as a credential, or `nil` when signed out. Not `scoped`: the sign-in is

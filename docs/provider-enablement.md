@@ -23,16 +23,20 @@ This check happens **once per provider**. After that, the provider is yours to m
 
 ## Your choices always stick
 
-Cursor uses login/logout beside its name in Customize instead of a toggle. Successful browser login
-turns Cursor on and refreshes it; logout removes OpenUsage's authorization and turns Cursor off.
-The saved authorization determines its state again on launch. Without it, Cursor stays off even if
-the Cursor app is signed in, and Reset All does not include it in the no-credentials fallback.
+Claude, Codex, Cursor, and Grok each have a **Login Method** in their Customize detail:
 
-Claude, Codex, and Grok work the same way as Cursor: login/logout replaces their toggle, a successful
-login turns them on, logout turns them off, and each launch sets them from the saved sign-in. Only an
-OpenUsage sign-in counts as detected for them — the tools' own logins on this Mac are not read — and
-Reset All never turns them on. (With several Claude or Codex cards, only the default card is
-login-gated.)
+- **Local Login** (the default) reads the login the tool already has on this Mac (Claude Code, the
+  Codex CLI, the Cursor app, the Grok CLI). The provider keeps its normal on/off toggle and is
+  detected like any other provider.
+- **OpenUsage Sign-In** uses a sign-in kept by OpenUsage itself. Login/logout replaces the toggle: a
+  successful login turns the provider on and refreshes it, logout turns it off, and each launch sets
+  it from the saved sign-in. The tool's own login on this Mac is not read, and Reset All never turns
+  it on. (With several Claude or Codex cards, only the default card offers this.)
+
+Switching the method drops the cached usage and turns the provider on only if the new method has a
+login to use. On the first launch with login methods, a provider that already has an OpenUsage
+sign-in keeps using it; the others switch to Local Login. OpenUsage sign-ins can be moved to another
+Mac from Settings → Sign-In Transfer.
 
 Everything you set in Customize — providers on or off, metric layout, menu-bar stars — carries across updates untouched. The only thing an update may ever change is turning **on** a provider you have never seen before, and only when you actually have that tool installed.
 

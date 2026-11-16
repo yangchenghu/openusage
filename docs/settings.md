@@ -51,6 +51,15 @@ All three alerts default off. The first time you turn one on, OpenUsage asks for
 |---|---|---|
 | Hide From Screen Share | On / Off | Off (default). On replaces the menu bar strip with the OpenUsage icon and wordmark while your screen is being shared or recorded, and restores your starred metrics the moment the capture ends. See [Menu bar](menu-bar.md#hiding-usage-while-screen-sharing). |
 
+## Sign-In Transfer
+
+Moves OpenUsage sign-ins (providers set to **OpenUsage Sign-In**, see [Provider enablement](provider-enablement.md)) to another Mac so you don't have to sign in again.
+
+- **Export Sign-Ins…** asks for a password (at least 8 characters), then where to save the file. The file is encrypted with that password.
+- **Import Sign-Ins…** asks for the password, then for the file. Each imported provider switches to OpenUsage Sign-In, turns on, and refreshes.
+
+Local logins are never exported. Providers renew sign-ins with single-use tokens, so if both Macs use the same imported sign-in, one of them may be signed out after a renewal; on Macs where the tools are installed, Local Login avoids that.
+
 ## Advanced
 
 | Setting | Options | What it does |

@@ -105,6 +105,15 @@ final class SignInSession {
         }
     }
 
+    /// Saves an account exported from another Mac as this card's sign-in. The caller turns the card on.
+    func adopt(_ imported: SignedInAccount) async throws {
+        try await loadOffMainActor { [store] in try store.save(imported) }
+        account = imported
+        errorMessage = nil
+        isLoaded = true
+        AppLog.info(LogTag.auth(providerID), "imported an OpenUsage sign-in")
+    }
+
     /// Re-reads the store after a refresh renewed (or a provider rejected) the tokens, so the UI shows
     /// the current state.
     func reload() async {
