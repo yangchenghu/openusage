@@ -10,48 +10,22 @@ OpenUsage shows how much of your AI coding plans you've used: session and weekly
 
 最初需要解决的问题是：**同一个 Cursor 账号在 0.7.16 中无法读取用量，在 0.8.0 中可以读取。** 对比 main 后确认，Cursor 的主用量接口仍然是 `GetCurrentPeriodUsage`，主要区别包括凭证来源、授权续期和部分数据解析。第一轮移植兼容修复后，维护者反馈仍无法获取 Cursor 用量，因此进一步接入 main 的浏览器账号授权方式。
 
-本分支保留 0.7.16 的 Dashboard、指标默认配置和状态栏排序，按需移植用量读取修复；Cursor 增加独立授权入口，其余厂商继续使用原有登录来源。main 已重写账号和历史统计架构，因此没有整体合并新版账号系统、多账号界面或 Tab。
+本分支保留 0.7.16 的 Dashboard、指标默认配置和状态栏排序，按需移植用量读取修复；Claude、Codex、Cursor、Grok 可在本机登录和 OpenUsage 应用内登录之间切换，其余厂商继续使用原有登录来源。main 已重写账号和历史统计架构，因此没有整体合并新版账号系统、多账号界面或 Tab。
 
 对比基线为 0.7.16 的 `abf472d` 与 2026-11-13 拉取的 main `c6c14f7`；main 的变化不一定都已包含在正式版 0.8.0 中。逐厂商差异、移植来源及暂未移植的功能见[兼容维护记录](docs/research/0.7.16-provider-backports.md)。
 
 **使用本分支请自行构建，见 [Building](#building)。下面的 Homebrew 和上游 Releases 安装方式不会安装这些本地修改。**
 
-## 本分支 Changelog
+本分支的改动记录与验证情况见 [BRANCH_CHANGELOG.md](BRANCH_CHANGELOG.md)。
 
-以下为本地维护改动，尚未发布新的版本号。
+## 登录方式
 
-### 2026-11-14 — Cursor 独立账号授权
+Claude、Codex、Cursor、Grok 可在各自的 **Customize** 详情中选择 **Login Method**：
 
-- 移植 main 的 Cursor 浏览器授权协议：使用 PKCE 校验，打开 Cursor 登录页并轮询授权结果，最多等待五分钟。菜单面板收起后仍会继续等待授权。
-- 在 **Customize 列表的 Cursor 右侧**增加 **login / logout**，替换独立开关；移除 Cursor 详情的 Account 模块，保留指标设置。
-- 授权成功后，先用新令牌验证用量接口，再保存到 OpenUsage 自己的 macOS Keychain 项目；开发版与正式版的授权分开保存，不修改 Cursor 应用的本机凭证。
-- 独立授权支持自动续期。续期令牌保存失败时保留内存中的新令牌、显示提示并重试保存；新登录失败或取消时保留原账号。
-- 从 `usage-summary` 定期读取独立授权账号的 Team/Enterprise 成员类型，避免套用本机另一个账号的套餐信息。
-- 授权完成后自动启用 Cursor 并刷新用量；**logout** 删除 OpenUsage 的授权、清除旧账号展示缓存并关闭 Cursor。重新启动时恢复对应状态；无授权时不再回退到 Cursor 本机登录，Reset All 也不会绕过登录要求。
-- 为授权轮询的 PKCE verifier 和请求标识补充日志脱敏。
+- **Local Login**（默认）：读取本机工具已有的登录（Claude Code、Codex CLI、Cursor 应用、Grok CLI），使用普通开关。
+- **OpenUsage Sign-In**：Customize 列表右侧的开关变成 **login / logout**。点击 login 后在浏览器或设备码页面完成授权，应用会自动保存登录并刷新用量；logout 删除登录并关闭该厂商。授权过期时，先 logout 再 login 即可。
 
-### 2026-11-13–14 — 厂商用量兼容修复
-
-- **Cursor：**支持只有访问 JWT、没有独立 refresh token 的本机会话续期；修复个人限额与团队支出混算，并补充 Extra Usage 的账期重置时间。
-- **Cursor：**兼容零用量历史日省略事件列表的响应，避免历史数据始终无法凑齐；通用请求计数备用路径同时填入 Total Usage 和 Requests，并保留历史读取，解决数据只落入默认隐藏指标的问题。
-- **Antigravity：**云端配额摘要优先读取 daily 的活跃计数，由 production 补齐缺失额度；保留原有本机语言服务器优先的流程。
-- **Grok：**按需额度从 cents 换算为 dollars，例如原始 `2500` 显示为 `$25.00 cap`。
-- **Z.ai：**识别 HTTP 200 响应中的业务错误 `401`，明确提示密钥失效。
-
-### 验证情况
-
-- 用量兼容修复阶段：`swift test --filter 'Cursor|Antigravity|Grok|ZAI'`，270 项通过。
-- 独立授权与日志脱敏阶段：`swift test --filter 'Cursor|LogRedaction'`，112 项通过。
-- Customize 列表登录与开关联动：`swift test --filter 'Cursor|FirstRunSeeder|ProviderEnablement'`，114 项通过。
-- 开发应用已通过构建、签名检查及启动验证。上述测试使用模拟响应和临时凭证；真实账号能否恢复用量读取，仍需完成浏览器授权后验证，界面点击检查尚未完成。
-
-## Cursor 授权使用方式
-
-1. 构建并启动本分支的应用。
-2. 打开 **Customize**，点击 Cursor 右侧的 **login**。
-3. 在浏览器完成 Cursor 登录和授权；应用会自动保存授权并刷新用量。
-
-授权成功后按钮变成 **logout**，表示 Cursor 已开启；点击登出后按钮恢复 **login**，Cursor 关闭。如果授权过期，可先 logout，再 login。更多说明见 [Cursor 文档](docs/providers/cursor.md)。
+OpenUsage Sign-In 的登录可以通过 **Settings → Sign-In Transfer** 加密导出，再导入到另一台 Mac。同一份登录不要在两台 Mac 上同时使用，否则续期后其中一台可能被登出。更多说明见[厂商启用与登录](docs/provider-enablement.md)和 [Sign-In Transfer](docs/settings.md#sign-in-transfer)。
 
 <p align="center">
   <img src="assets/screenshot.jpg?v=20260706" alt="OpenUsage menu bar tracker showing Claude and Codex session, weekly, and spend usage" width="900">
@@ -85,7 +59,7 @@ Either way, the app updates itself in place via signed, notarized [Sparkle](docs
 
 Most providers read the credentials already on your machine (keychain, auth files, app state) — no extra login. OpenRouter and Z.ai are the exceptions: they have no local credential to reuse, so you supply an API key (see [OpenRouter setup](docs/providers/openrouter.md) or [Z.ai setup](docs/providers/zai.md)). Credentials are used only for the corresponding provider requests. OpenUsage's separate anonymous summaries and public pricing downloads are documented under [Privacy & usage data](docs/privacy.md).
 
-This branch uses [Cursor browser sign-in](docs/providers/cursor.md#where-credentials-come-from): login/logout beside Cursor in Customize also enables/disables the provider. Cursor stays off without an OpenUsage sign-in.
+This branch adds a **Login Method** for Claude, Codex, Cursor, and Grok: **Local Login** (the default) reads the tool's own login as above, while **OpenUsage Sign-In** uses a browser or device sign-in kept by OpenUsage, with login/logout in Customize replacing the provider's toggle. See [Provider enablement](docs/provider-enablement.md).
 
 ## Features
 
