@@ -47,17 +47,29 @@ struct WidgetGroupedListView: View {
     }
 
     private func header(_ group: ProviderGroup) -> some View {
-        ProviderSectionHeader(
+        let providerID = group.provider.id
+        let hasExpandedContent = group.hasExpandedMetrics || !group.provider.visibleLinks.isEmpty
+        return ProviderSectionHeader(
             provider: group.provider,
-            plan: dataStore.plan(for: group.provider.id),
-            warning: dataStore.headerNotice(for: group.provider.id),
-            refreshing: dataStore.refreshingProviderIDs.contains(group.provider.id),
-            staleness: dataStore.stalenessHint(for: group.provider.id),
-            onCopyScreenshot: { shareCard(group) }
+            plan: dataStore.plan(for: providerID),
+            warning: dataStore.headerNotice(for: providerID),
+            refreshing: dataStore.refreshingProviderIDs.contains(providerID),
+            staleness: dataStore.stalenessHint(for: providerID),
+            onCopyScreenshot: { shareCard(group) },
+            isExpanded: layout.isProviderExpanded(providerID),
+            onToggleExpanded: hasExpandedContent
+                ? {
+                    withAnimation(Motion.spring) {
+                        _ = layout.setProviderExpanded(!layout.isProviderExpanded(providerID), for: providerID)
+                    }
+                }
+                : nil,
+            // Drag stays on the title cluster. The copy button and caret sit outside it so a click
+            // expands or copies instead of lifting the section.
+            reorderDrag: AnyGesture(providerDragGesture(for: group))
         )
-        // Keep the provider mark and hover-revealed copy control aligned with the card's content edges.
+        // Keep the provider mark and the trailing copy/caret aligned with the card's content edges.
         .padding(.horizontal, 8)
-        .highPriorityGesture(providerDragGesture(for: group))
         .contextMenu {
             // Hides the whole provider section (the Customize provider list brings it back). Mirrors
             // the per-metric "Hide" but one level up, so the verb order reads the same on a header as a row.
@@ -104,7 +116,6 @@ struct WidgetGroupedListView: View {
     private enum DashboardMetricCardRow: Identifiable {
         case metric(ResolvedRow)
         case separator
-        case toggle
         /// #596: the provider's quick-link buttons (Status / Console / Dashboard ...), pinned at the
         /// bottom of the collapsible expanded section. They collapse with the caret — part of the
         /// expander, not always-visible chrome.
@@ -116,8 +127,6 @@ struct WidgetGroupedListView: View {
                 "metric:\(row.descriptor.id)"
             case .separator:
                 "expanded-separator"
-            case .toggle:
-                "expand-toggle"
             case .links:
                 "provider-links"
             }
@@ -160,8 +169,6 @@ struct WidgetGroupedListView: View {
                             id: expandedDividerID(for: providerID),
                             in: .named(reorderSpaceName)
                         )
-                case .toggle:
-                    expandToggle(providerID: providerID, isExpanded: isExpanded)
                 }
             }
         }
@@ -182,30 +189,19 @@ struct WidgetGroupedListView: View {
         links: [ProviderLink]
     ) -> [DashboardMetricCardRow] {
         // #596: provider quick-link buttons live INSIDE the collapsible expanded section, pinned at its
-        // bottom, so collapsing the caret hides them along with the expanded metrics — they're part of
-        // the expander, not always-visible chrome. The caret shows for any provider with expanded
+        // bottom, so collapsing the header caret hides them along with the expanded metrics — they're
+        // part of the expander, not always-visible chrome. The caret shows for any provider with expanded
         // content (metrics OR links), so a links-only provider still gets a caret to reveal its buttons.
+        // The caret itself is a header control, not a card row: a collapsed card is only its Always
+        // Visible rows, and an open card ends at the links instead of a full-width arrow.
         let hasLinks = !links.isEmpty
         let hasExpandedContent = hasExpandedMetrics || hasLinks
         let always = alwaysRows.map(DashboardMetricCardRow.metric)
-        guard hasExpandedContent else { return always }
-        guard isExpanded else { return always + [.toggle] }
+        guard hasExpandedContent, isExpanded else { return always }
         return always
             + [.separator]
             + expandedRows.map(DashboardMetricCardRow.metric)
             + (hasLinks ? [.links(links)] : [])
-            + [.toggle]
-    }
-
-    /// The centered caret at the bottom of a provider card that reveals or hides its On Demand metrics
-    /// and quick links. It stays below the Always Visible rows when collapsed and slides below all
-    /// expanded content when open.
-    private func expandToggle(providerID: String, isExpanded: Bool) -> some View {
-        DashboardMetricCardCaret(isExpanded: isExpanded) {
-            withAnimation(Motion.spring) {
-                _ = layout.setProviderExpanded(!isExpanded, for: providerID)
-            }
-        }
     }
 
     private func expandedDividerID(for providerID: String) -> String {
@@ -280,7 +276,7 @@ struct WidgetGroupedListView: View {
         }
     }
 
-    private func providerDragGesture(for group: ProviderGroup) -> some Gesture {
+    private func providerDragGesture(for group: ProviderGroup) -> some Gesture<DragGesture.Value> {
         reorderDragGesture(
             id: group.provider.id,
             coordinateSpaceName: reorderSpaceName,

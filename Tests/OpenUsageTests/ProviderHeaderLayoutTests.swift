@@ -18,7 +18,9 @@ final class ProviderHeaderLayoutTests: XCTestCase {
                 plan: longPlan,
                 warning: "Refresh failed",
                 staleness: StalenessHint(label: "Outdated", tooltip: "Last updated 2h ago"),
-                onCopyScreenshot: { true }
+                onCopyScreenshot: { true },
+                isExpanded: false,
+                onToggleExpanded: {}
             )
             .defaultAppStorage(defaults)
             .environment(\.hoverTooltipsDisabled, true)

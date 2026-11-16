@@ -2,7 +2,8 @@ import SwiftUI
 
 /// Shared provider section header used by the dashboard and its lifted provider-reorder preview.
 /// The provider mark and name lead, followed by the optional plan badge. Dashboard callers supply a
-/// screenshot-copy action, revealed at the trailing edge while the header is hovered. Callers can also
+/// screenshot-copy action, revealed while the header is hovered, and an expand caret parked to its
+/// right. The caret stays visible; the copy glyph still fades out when the pointer leaves. Callers can also
 /// supply an optional `warning` — the latest refresh error, rendered as a small amber
 /// triangle beside the name whose hover tooltip carries the message (e.g. "Not logged in. Run `codex`
 /// to authenticate."). The
@@ -24,6 +25,13 @@ struct ProviderSectionHeader: View {
     /// Dashboard-only screenshot action. The reorder preview omits it, while Customize uses its own
     /// row type and is unaffected by this header.
     var onCopyScreenshot: (() -> Bool)?
+    /// When non-nil, the expand caret sits to the right of the copy button. Hidden when the provider
+    /// has neither On Demand metrics nor quick links.
+    var isExpanded = false
+    var onToggleExpanded: (() -> Void)?
+    /// Reorder drag for the leading cluster only. Keeping it off the copy button and caret lets those
+    /// clicks land; a high-priority drag on the whole row would take them.
+    var reorderDrag: AnyGesture<DragGesture.Value>?
 
     /// Header type and icon track the density setting like the rows do, so Compact shrinks the
     /// whole section anatomy — not just the rows under it.
@@ -38,7 +46,10 @@ struct ProviderSectionHeader: View {
         warning: String? = nil,
         refreshing: Bool = false,
         staleness: StalenessHint? = nil,
-        onCopyScreenshot: (() -> Bool)? = nil
+        onCopyScreenshot: (() -> Bool)? = nil,
+        isExpanded: Bool = false,
+        onToggleExpanded: (() -> Void)? = nil,
+        reorderDrag: AnyGesture<DragGesture.Value>? = nil
     ) {
         self.provider = provider
         self.plan = plan
@@ -46,58 +57,76 @@ struct ProviderSectionHeader: View {
         self.refreshing = refreshing
         self.staleness = staleness
         self.onCopyScreenshot = onCopyScreenshot
+        self.isExpanded = isExpanded
+        self.onToggleExpanded = onToggleExpanded
+        self.reorderDrag = reorderDrag
     }
 
     var body: some View {
         HStack(spacing: 5) {
-            // The provider mark replaces the dashboard's visual drag grip. Reordering still belongs
-            // to the whole header at the caller, so the logo itself stays presentational.
-            ProviderIcon(source: provider.icon, inset: 0.04)
-                .frame(width: density.headerIconSize, height: density.headerIconSize)
-                .partyPulse(partyMode)
-            // Baseline-aligned pair: the plan badge (and stale tag) are smaller type and sit on the
-            // name's text baseline, so the words line up along the bottom rather than floating centered.
-            HStack(alignment: .firstTextBaseline, spacing: 5) {
-                // Give the plan first choice of the available width, while still allowing an oversized
-                // plan to truncate. Account names and the lower-priority stale tag yield space first.
-                Text(provider.displayName)
-                    .font(.system(size: density.headerPointSize, weight: .semibold))
-                    .foregroundStyle(.primary)
-                    .lineLimit(1)
-                    .layoutPriority(1)
-                if let plan {
-                    ProviderPlanBadge(plan: plan)
-                        .layoutPriority(2)
-                }
-                // Tertiary, below the plan in hierarchy: outdated content, not something the user acts on.
-                // Short by design ("Outdated") so it never pushes the plan name onto a second line — the
-                // precise age rides in the hover tooltip. Hidden while a refresh is in flight: the spinner
-                // already says "working on it".
-                if let staleness, !refreshing {
-                    Text(staleness.label)
-                        .font(.system(size: density.planBadgePointSize))
-                        .foregroundStyle(.tertiary)
+            HStack(spacing: 5) {
+                // The provider mark replaces the dashboard's visual drag grip. Reordering still belongs
+                // to this leading cluster, so the logo itself stays presentational.
+                ProviderIcon(source: provider.icon, inset: 0.04)
+                    .frame(width: density.headerIconSize, height: density.headerIconSize)
+                    .partyPulse(partyMode)
+                // Baseline-aligned pair: the plan badge (and stale tag) are smaller type and sit on the
+                // name's text baseline, so the words line up along the bottom rather than floating centered.
+                HStack(alignment: .firstTextBaseline, spacing: 5) {
+                    // Give the plan first choice of the available width, while still allowing an oversized
+                    // plan to truncate. Account names and the lower-priority stale tag yield space first.
+                    Text(provider.displayName)
+                        .font(.system(size: density.headerPointSize, weight: .semibold))
+                        .foregroundStyle(.primary)
                         .lineLimit(1)
-                        .hoverTooltip(staleness.tooltip)
+                        .layoutPriority(1)
+                    if let plan {
+                        ProviderPlanBadge(plan: plan)
+                            .layoutPriority(2)
+                    }
+                    // Tertiary, below the plan in hierarchy: outdated content, not something the user acts on.
+                    // Short by design ("Outdated") so it never pushes the plan name onto a second line — the
+                    // precise age rides in the hover tooltip. Hidden while a refresh is in flight: the spinner
+                    // already says "working on it".
+                    if let staleness, !refreshing {
+                        Text(staleness.label)
+                            .font(.system(size: density.planBadgePointSize))
+                            .foregroundStyle(.tertiary)
+                            .lineLimit(1)
+                            .hoverTooltip(staleness.tooltip)
+                    }
                 }
+                if refreshing {
+                    MotionAwareProgressView(controlSize: .mini)
+                        .accessibilityLabel("Refreshing")
+                } else if let warning {
+                    Image(systemName: "exclamationmark.triangle.fill")
+                        .font(.system(size: 10, weight: .semibold))
+                        .foregroundStyle(Theme.notice)
+                        .hoverTooltip(warning)
+                        .accessibilityLabel(warning)
+                }
+                Spacer(minLength: 8)
             }
-            if refreshing {
-                MotionAwareProgressView(controlSize: .mini)
-                    .accessibilityLabel("Refreshing")
-            } else if let warning {
-                Image(systemName: "exclamationmark.triangle.fill")
-                    .font(.system(size: 10, weight: .semibold))
-                    .foregroundStyle(Theme.notice)
-                    .hoverTooltip(warning)
-                    .accessibilityLabel(warning)
-            }
-            Spacer(minLength: 8)
-            if let onCopyScreenshot {
-                CopyFeedbackButton(
-                    accessibilityLabel: "Copy \(provider.displayName) Screenshot",
-                    isRevealed: isHovered,
-                    action: onCopyScreenshot
-                )
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .contentShape(Rectangle())
+            .modifier(OptionalHighPriorityDrag(gesture: reorderDrag))
+
+            if onCopyScreenshot != nil || onToggleExpanded != nil {
+                // Copy reserves its slot even while hidden, so the caret doesn't jump on hover.
+                // 4pt clears the copy button's 6pt hit overflow off the caret glyph.
+                HStack(spacing: 4) {
+                    if let onCopyScreenshot {
+                        CopyFeedbackButton(
+                            accessibilityLabel: "Copy \(provider.displayName) Screenshot",
+                            isRevealed: isHovered,
+                            action: onCopyScreenshot
+                        )
+                    }
+                    if let onToggleExpanded {
+                        DashboardMetricCardCaret(isExpanded: isExpanded, action: onToggleExpanded)
+                    }
+                }
             }
         }
         .padding(.leading, 2)
@@ -131,5 +160,18 @@ struct ReorderGrip: View {
             .foregroundStyle(.tertiary)
             .frame(width: 16, height: 22)
             .contentShape(Rectangle())
+    }
+}
+
+/// Drag-to-reorder belongs on the header's leading cluster. Absent in the lift preview and layout tests.
+private struct OptionalHighPriorityDrag: ViewModifier {
+    let gesture: AnyGesture<DragGesture.Value>?
+
+    func body(content: Content) -> some View {
+        if let gesture {
+            content.highPriorityGesture(gesture)
+        } else {
+            content
+        }
     }
 }

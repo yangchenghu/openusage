@@ -10,11 +10,11 @@ When no provider is on, the dashboard shows **Choose Providers**, which opens Cu
 
 Updates never change the providers you already have on or off — but when an update ships a provider you've never seen, a local check runs once for just that provider and turns it on only if you actually have the tool. See [Which Providers Are On](provider-enablement.md) for the full lifecycle.
 
-Each provider card leads with its **Always Visible** metrics. When a card is collapsed, On Demand metrics and quick links are hidden behind the in-card caret at the bottom. Click it to expand: a thin line marks the boundary after Always Visible, followed by the On Demand rows and quick links, with the caret at the bottom of the card. Click the caret again to collapse. Open cards stay open across popover closes and app restarts. A provider with neither On Demand metrics nor quick links shows no line or caret.
+Each provider card leads with its **Always Visible** metrics. When a card is collapsed, On Demand metrics and quick links stay hidden. The expand caret sits at the top right of the provider header, to the right of the screenshot-copy button, and stays visible. The copy button still appears only while the pointer is over the header and hides when it leaves. Click the caret to expand: a thin line marks the boundary after Always Visible, followed by the On Demand rows and quick links. Click the caret again to collapse — it points up while that section is open. Open cards stay open across popover closes and app restarts. A provider with neither On Demand metrics nor quick links shows no line or caret.
 
 When you expand a card, the tucked-away metrics open below the line as a single-column list, so each detail row keeps the full card width.
 
-A provider card can also show **quick-link buttons** pinned at the bottom of its expanded section — Status, Console, Dashboard, and the like — that open the provider's own pages in your default browser. They're part of the expander, so collapsing the caret hides them along with the tucked-away metrics. The caret sits below the links. Buttons lay out up to three across, wrapping to a second row when there are more.
+A provider card can also show **quick-link buttons** pinned at the bottom of its expanded section — Status, Console, Dashboard, and the like — that open the provider's own pages in your default browser. They're part of the expander, so collapsing the caret hides them along with the tucked-away metrics. Buttons lay out up to three across, wrapping to a second row when there are more.
 
 ## Usage Summary
 
@@ -78,7 +78,7 @@ The **provider list** shows every provider with a switch to turn it on or off, a
 
 A provider's **detail** has a back button and provider-specific Reset control in its top bar, followed by two metric sections: **Always Visible** (shown on the dashboard card) and **On Demand** (tucked behind the card's caret). Each metric row has a drag grip, its name, an always-visible star for the menu bar, and an on/off switch. Drag a metric into the other card—or onto one of that card's rows—to move it between Always Visible and On Demand. An empty card shows a dashed **Drag metrics here** target. You can star up to two metrics per provider. OpenRouter and Z.ai also show an **API Key** section here, where you can add, replace, reveal, or clear that provider's key.
 
-Drag-reorder also works directly on the dashboard — drag a row within its provider, drag it across the caret boundary while the card is open, or drag a provider header to reorder sections. On a Force Touch trackpad you'll feel a light tap each time the dragged item snaps into a new slot.
+Drag-reorder also works directly on the dashboard — drag a row within its provider, drag it across the divider while the card is open, or drag a provider header to reorder sections. On a Force Touch trackpad you'll feel a light tap each time the dragged item snaps into a new slot.
 
 The default reset layout keeps each provider's core quota meters always visible, then tucks Usage Trend, balances, reset details, and spend-history rows on demand. Upgrading to the summary list moves existing Usage Trend rows on demand once; later placement choices and each card's saved open/closed state are kept. Optional detail rows like Claude Sonnet and Cursor Requests/Credits stay off by default, but start on demand if you enable them.
 

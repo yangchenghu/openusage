@@ -31,6 +31,9 @@ struct DashboardMetricCardSeparator: View {
     }
 }
 
+/// Expand/collapse control at the trailing edge of a provider header, to the right of the
+/// hover-revealed copy button. Always visible, so the card doesn't spend a row on it. Points down
+/// while collapsed and up while the On Demand section is open.
 struct DashboardMetricCardCaret: View {
     let isExpanded: Bool
     let action: () -> Void
@@ -38,15 +41,15 @@ struct DashboardMetricCardCaret: View {
     var body: some View {
         Button(action: action) {
             Image(systemName: isExpanded ? "chevron.up" : "chevron.down")
-                .font(.system(size: 10, weight: .semibold))
+                .font(.system(size: 11, weight: .semibold))
                 .foregroundStyle(.secondary)
-                .frame(width: 14, height: 14)
-                .frame(maxWidth: .infinity)
-                .padding(.vertical, 5)
-                .frame(maxWidth: .infinity)
+                .frame(width: 28, height: 28)
                 .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
+        // Same 16pt layout slot as `CopyFeedbackButton`: the glyphs line up, and the 28pt hit
+        // rectangle doesn't make the header taller.
+        .padding(-6)
         .accessibilityLabel(isExpanded ? "Show less" : "Show more")
     }
 }

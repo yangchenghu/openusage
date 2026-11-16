@@ -101,8 +101,14 @@ struct ReorderLiftPreview: View {
         // Same anatomy as the live dashboard section (`WidgetGroupedListView.section` + `container`):
         // header over the shared metric card, at the density's header→card spacing.
         VStack(alignment: .leading, spacing: density.headerToCardSpacing) {
-            ProviderSectionHeader(provider: provider, plan: plan)
-                .padding(.horizontal, 8)
+            ProviderSectionHeader(
+                provider: provider,
+                plan: plan,
+                onCopyScreenshot: { false },
+                isExpanded: isExpanded,
+                onToggleExpanded: showsCaret ? {} : nil
+            )
+            .padding(.horizontal, 8)
 
             DashboardMetricCard {
                 ForEach(Array(rows.enumerated()), id: \.offset) { index, row in
@@ -116,9 +122,6 @@ struct ReorderLiftPreview: View {
                 }
                 if isExpanded, !links.isEmpty {
                     ProviderLinksView(links: links)
-                }
-                if showsCaret {
-                    DashboardMetricCardCaret(isExpanded: isExpanded, action: {})
                 }
             }
         }
@@ -214,7 +217,7 @@ func reorderDragGesture(
     makeLift: @escaping (DragGesture.Value) -> ReorderLift?,
     orderedIDs: @escaping () -> [String],
     reorder: @escaping (_ target: String) -> Bool
-) -> some Gesture {
+) -> some Gesture<DragGesture.Value> {
     DragGesture(minimumDistance: 4, coordinateSpace: .named(coordinateSpaceName))
         .onChanged { value in
             active.wrappedValue = id
