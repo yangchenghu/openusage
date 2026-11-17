@@ -22,8 +22,10 @@ TARGET_NAME="OpenUsage"                 # SwiftPM target / binary name
 APP_DISPLAY="OpenUsage"                 # user-facing app name
 BUNDLE_ID="${BUNDLE_ID:-com.robinebers.openusage.dev}"
 MIN_SYSTEM_VERSION="15.0"
-APP_VERSION="0.7.0"
-APP_BUILD="0.7.0"
+# This fork pins the menu-bar version here. Upstream release builds take it from the git tag
+# (script/release.sh OPENUSAGE_VERSION). Leaving this at 0.7.0 made every local build look the same.
+APP_VERSION="0.7.18"
+APP_BUILD="0.7.18"
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 DIST_DIR="$ROOT_DIR/dist"
@@ -129,7 +131,7 @@ cat >"$INFO_PLIST" <<PLIST
   <key>CFBundlePackageType</key>
   <string>APPL</string>
   <key>CFBundleShortVersionString</key>
-  <string>$APP_VERSION-dev</string>
+  <string>$APP_VERSION</string>
   <key>CFBundleVersion</key>
   <string>$APP_BUILD</string>
   <key>LSMinimumSystemVersion</key>

@@ -111,7 +111,7 @@ CONFIG=debug ./script/build_and_run.sh verify
 
 - 默认开发 bundle id 为 `com.robinebers.openusage.dev`，设置及独立 Cursor 授权与正式版分开保存。
 - 开发包没有 Sparkle 更新源，不会自动升级到新版。
-- 脚本原有的开发版本标签是 `0.7.0-dev`，不代表源码退回 0.7.0；本次没有调整版本号。
+- 开发包版本号为 `0.7.18`（面板底部显示 `OpenUsage 0.7.18`）。此前脚本写死 `0.7.0-dev`，界面上看不出本地维护版本。
 - iCloud Sync 需要匹配的 provisioning profile；本机验证时未配置，因此生成的开发包不支持 iCloud Sync。
 
 
