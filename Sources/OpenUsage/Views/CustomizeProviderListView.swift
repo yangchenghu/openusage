@@ -60,14 +60,10 @@ struct CustomizeProviderListView: View {
         .reorderFrame(id: row.id, in: .named(reorderSpaceName))
     }
 
-    /// Cards using their OpenUsage sign-in show login/logout instead of the on/off toggle.
+    /// Cursor uses only its OpenUsage login, so its row shows login/logout instead of the on/off toggle.
     private func trailingControl(for row: ProviderRow) -> AnyView? {
-        guard container.usesOpenUsageSignIn(row.id) else { return nil }
-        if row.id == "cursor", let session = container.cursorSignInSession {
-            return AnyView(CursorAccountControl(session: session))
-        }
-        if let session = container.signInSessions[row.id] { return AnyView(SignInAccountControl(session: session)) }
-        return nil
+        guard container.usesOpenUsageSignIn(row.id), let session = container.cursorSignInSession else { return nil }
+        return AnyView(CursorAccountControl(session: session))
     }
 
     private func providerDragGesture(for row: ProviderRow) -> some Gesture {

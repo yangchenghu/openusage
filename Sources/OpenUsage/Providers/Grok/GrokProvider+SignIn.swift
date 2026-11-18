@@ -1,8 +1,8 @@
 import Foundation
 
 extension GrokProvider {
-    /// The OpenUsage sign-in is Grok's only source; signed out, it reports that instead of reading
-    /// (and rotating) the Grok CLI's login.
+    /// The fallback to the OpenUsage sign-in reads only that sign-in; the Grok CLI's login was already
+    /// tried and is not rotated here.
     func refreshSignedIn() async -> ProviderSnapshot {
         guard let signIn else { return ProviderSnapshot.error(provider: provider, error: GrokAuthError.notSignedIn) }
         let loaded: SignedInAccount?
@@ -35,14 +35,15 @@ extension GrokProvider {
         }
     }
 
-    func loadSignedInAccount() async -> SignedInAccount? {
-        guard let signIn else { return nil }
-        return await loadOffMainActor { (try? signIn.load()) ?? nil }
+    /// The saved sign-in, whether or not Grok is falling back to it right now.
+    func loadSavedSignIn() async -> SignedInAccount? {
+        guard let signInStore else { return nil }
+        return await loadOffMainActor { (try? signInStore.load()) ?? nil }
     }
 
     /// Renews the sign-in. Only a refusal of the refresh token is an expired sign-in; anything else is an
     /// ordinary request failure and the next refresh tries again. A Keychain write failure keeps the new
-    /// tokens in the store's memory (see `SignedInAccountKeychainStore`) and is logged, not fatal.
+    /// tokens in memory (see `SignInVault`) and is logged, not fatal.
     private func renewSignIn(_ account: SignedInAccount, store: any SignedInAccountStoring) async throws -> SignedInAccount {
         guard let refreshToken = account.refreshToken?.nilIfEmpty else { throw GrokAuthError.signInExpired }
         let response: HTTPResponse

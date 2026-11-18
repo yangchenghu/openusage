@@ -11,10 +11,23 @@ struct ProcessEnvironmentReader: EnvironmentReading {
     var shellEnvironment: LoginShellEnvironment = .shared
     var launchSnapshot: @Sendable () -> ShellEnvironmentSnapshot? = { ShellEnvironmentSnapshotStore.launchSnapshot }
     var blocksOnShellCapture = true
+    /// `CLAUDE_CONFIG_DIR` when no environment layer exports it (see `ClaudeConfigDirDiscovery`).
+    var claudeConfigDirFallback: @Sendable () -> String? = { ClaudeConfigDirDiscovery.discovered }
 
     private static let identityKeys = Set(ShellEnvironmentSnapshot.capturedKeys)
+    private static let claudeConfigDirKey = "CLAUDE_CONFIG_DIR"
 
     func value(for name: String) -> String? {
+        guard name == Self.claudeConfigDirKey else { return environmentValue(for: name) }
+        // An exported Claude config directory is remembered for launches that won't see the export.
+        if let exported = environmentValue(for: name) {
+            ClaudeConfigDirDiscovery.remember(exported)
+            return exported
+        }
+        return claudeConfigDirFallback()
+    }
+
+    private func environmentValue(for name: String) -> String? {
         // The process environment first (set by launchd, `launchctl setenv`, or a terminal launch),
         // then the captured login-shell environment — so keys a user exports in their shell profile
         // still resolve in a packaged app launched from Finder/Dock. See `LoginShellEnvironment`.

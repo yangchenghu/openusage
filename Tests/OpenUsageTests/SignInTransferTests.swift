@@ -1,4 +1,3 @@
-import os
 import XCTest
 @testable import OpenUsage
 
@@ -32,36 +31,71 @@ final class SignInTransferFileTests: XCTestCase {
 }
 
 @MainActor
-final class SignInModeTests: XCTestCase {
-    func testStoredModeDefaultsToLocalLogin() throws {
-        let suite = "SignInMode.\(UUID().uuidString)"
-        let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))
-        defer { defaults.removePersistentDomain(forName: suite) }
-        let reader = SignInModeReader.stored(providerID: "claude", defaults: defaults)
-        XCTAssertFalse(reader.usesSignIn)
+final class SignInFallbackTests: XCTestCase {
+    func testOnlyAMissingOrRejectedLocalLoginHandsOverToTheSignIn() {
+        let provider = GrokProvider().provider
+        func snapshot(_ category: ErrorCategory) -> ProviderSnapshot {
+            ProviderSnapshot.error(provider: provider, message: "x", category: category)
+        }
+        XCTAssertTrue(SignInFallback.localLoginMissing(snapshot(.notLoggedIn)))
+        XCTAssertTrue(SignInFallback.localLoginMissing(snapshot(.authExpired)))
+        XCTAssertFalse(SignInFallback.localLoginMissing(snapshot(.network)))
+        XCTAssertFalse(SignInFallback.localLoginMissing(snapshot(.rateLimited)))
+    }
+}
 
-        let store = SignInModeStore(providerIDs: ["claude"], defaults: defaults)
-        XCTAssertFalse(store.hasStoredMode(for: "claude"))
-        store.set(.openUsage, for: "claude")
-        XCTAssertTrue(reader.usesSignIn)
-        XCTAssertEqual(SignInModeStore(providerIDs: ["claude"], defaults: defaults).mode(for: "claude"), .openUsage)
+/// Only reports which services exist; never hands out a secret.
+private struct ExistingItemsKeychain: KeychainAccessing {
+    let services: Set<String>
+    func readGenericPassword(service: String) throws -> String? { XCTFail("must not read a secret"); return nil }
+    func writeGenericPassword(service: String, value: String) throws { XCTFail("must not write") }
+    func genericPasswordExists(service: String) -> Bool? { services.contains(service) }
+}
+
+/// Regression: a Claude Code login under cac's `CLAUDE_CONFIG_DIR` looked missing after a restart,
+/// because a Finder-launched OpenUsage never sees that variable.
+final class ClaudeConfigDirDiscoveryTests: XCTestCase {
+    private var home: URL!
+    private var defaults: UserDefaults!
+    private var suite = ""
+
+    override func setUpWithError() throws {
+        home = FileManager.default.temporaryDirectory.appendingPathComponent("openusage-cac-\(UUID().uuidString)")
+        for env in ["other", "work"] {
+            try FileManager.default.createDirectory(
+                at: home.appendingPathComponent(".cac/envs/\(env)/.claude"), withIntermediateDirectories: true)
+        }
+        try "work\n".write(to: home.appendingPathComponent(".cac/current"), atomically: true, encoding: .utf8)
+        suite = "ClaudeConfigDir.\(UUID().uuidString)"
+        defaults = try XCTUnwrap(UserDefaults(suiteName: suite))
     }
 
-    /// Switching the method takes effect on the next read, without rebuilding the provider.
-    func testLocalLoginReadsTheCLIAndSwitchesLive() async {
-        let usesSignIn = OSAllocatedUnfairLock(initialState: false)
-        let grok = GrokProvider(
-            authStore: GrokAuthStore(files: FakeFiles(["~/.grok/auth.json": #"{"cli":{"key":"grok-cli-token"}}"#])),
-            signIn: InMemorySignInStore(),
-            signInMode: SignInModeReader { usesSignIn.withLock { $0 } }
-        )
-        XCTAssertFalse(grok.requiresOpenUsageSignIn)
-        let localDetected = await grok.hasLocalCredentials()
-        XCTAssertTrue(localDetected, "local login reads the Grok CLI's auth")
+    override func tearDownWithError() throws {
+        defaults.removePersistentDomain(forName: suite)
+        try? FileManager.default.removeItem(at: home)
+    }
 
-        usesSignIn.withLock { $0 = true }
-        XCTAssertTrue(grok.requiresOpenUsageSignIn)
-        let signInDetected = await grok.hasLocalCredentials()
-        XCTAssertFalse(signInDetected, "OpenUsage Sign-In ignores the CLI's login")
+    private func service(_ directory: String) -> String {
+        "Claude Code-credentials-\(ClaudeAuthStore.configDirHash(directory))"
+    }
+
+    func testFindsTheActiveCacEnvironmentsLoginAndRemembersIt() {
+        let work = home.path + "/.cac/envs/work/.claude"
+        let other = home.path + "/.cac/envs/other/.claude"
+        let keychain = ExistingItemsKeychain(services: [service(work), service(other)])
+
+        let found = ClaudeConfigDirDiscovery.discover(defaults: defaults, home: home.path, keychain: keychain)
+
+        XCTAssertEqual(found, work)
+        XCTAssertEqual(defaults.string(forKey: ClaudeConfigDirDiscovery.defaultsKey), work)
+    }
+
+    func testDefaultLoginOrNoLoginLeavesTheEnvironmentAlone() {
+        let work = home.path + "/.cac/envs/work/.claude"
+        let withDefault = ExistingItemsKeychain(services: ["Claude Code-credentials", service(work)])
+        XCTAssertNil(ClaudeConfigDirDiscovery.discover(defaults: defaults, home: home.path, keychain: withDefault))
+        XCTAssertNil(ClaudeConfigDirDiscovery.discover(
+            defaults: defaults, home: home.path, keychain: ExistingItemsKeychain(services: [])))
+        XCTAssertNil(defaults.string(forKey: ClaudeConfigDirDiscovery.defaultsKey))
     }
 }

@@ -53,12 +53,12 @@ All three alerts default off. The first time you turn one on, OpenUsage asks for
 
 ## Sign-In Transfer
 
-Moves OpenUsage sign-ins (providers set to **OpenUsage Sign-In**, see [Provider enablement](provider-enablement.md)) to another Mac so you don't have to sign in again.
+Moves OpenUsage sign-ins (see [Provider enablement](provider-enablement.md)) to another Mac so you don't have to sign in again.
 
 - **Export Sign-Ins…** asks for a password (at least 8 characters), then where to save the file. The file is encrypted with that password.
-- **Import Sign-Ins…** asks for the password, then for the file. Each imported provider switches to OpenUsage Sign-In, turns on, and refreshes.
+- **Import Sign-Ins…** asks for the password, then for the file. Each imported provider turns on and refreshes. Claude, Codex, and Grok still prefer a working local login on that Mac.
 
-Local logins are never exported. Providers renew sign-ins with single-use tokens, so if both Macs use the same imported sign-in, one of them may be signed out after a renewal; on Macs where the tools are installed, Local Login avoids that.
+Local logins are never exported. Providers renew sign-ins with single-use tokens, so if both Macs use the same imported sign-in, one of them may be signed out after a renewal; on Macs where the tools are logged in, their local login is used instead, which avoids that.
 
 ## Advanced
 

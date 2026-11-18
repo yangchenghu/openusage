@@ -35,8 +35,6 @@ final class AppContainer {
     /// In-app sign-ins keyed by the provider card they belong to (Claude, Codex, Grok). Cursor keeps its
     /// own `CursorAccountSession`.
     let signInSessions: [String: SignInSession]
-    /// Each login-gated card's login method (local login vs. OpenUsage sign-in).
-    let signInModes: SignInModeStore
     /// The provider runtimes, kept so on-demand credential detection (Customize "Reset All" and
     /// `NewProviderSeeder`) can re-probe `hasLocalCredentials()` on every card.
     let providers: [ProviderRuntime]
@@ -146,10 +144,8 @@ final class AppContainer {
             })
         }
         self.resetClaims = resetClaims
-        let signInModes = SignInModeStore(providerIDs: registry.providers.map(\.id))
-        self.signInModes = signInModes
         self.signInSessions = Self.makeSignInSessions(
-            providers: providers, dataStore: dataStore, enablement: enablement, modes: signInModes
+            providers: providers, dataStore: dataStore, enablement: enablement
         )
 
         self.transparency = PopoverTransparencyStore()
@@ -168,7 +164,7 @@ final class AppContainer {
         // effectively always is. Notification authorization is requested the first time a trigger is
         // turned on in Settings, not at launch — triggers default off. No-op under tests.
         AppNotifications.shared.registerAsDelegate()
-        await restoreLoginMethods()
+        await restoreSignIns()
     }
 
     deinit {

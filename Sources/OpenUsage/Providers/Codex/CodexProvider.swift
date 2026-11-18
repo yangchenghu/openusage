@@ -77,13 +77,9 @@ final class CodexProvider: ProviderRuntime {
         ] + WidgetDescriptor.spendTiles(provider: provider)
     }
 
-    var requiresOpenUsageSignIn: Bool { authStore.signIn != nil }
-
     func hasLocalCredentials() async -> Bool {
-        // A sign-in-gated card is "detected" only by its OpenUsage sign-in, never by the CLI's login.
-        if authStore.signIn != nil {
-            return await loadOffMainActor({ [authStore] in (try? authStore.loadSignInAuth()) ?? nil }) != nil
-        }
+        // A saved OpenUsage sign-in counts as a login too.
+        if await loadOffMainActor({ [authStore] in authStore.hasSavedSignIn() }) { return true }
         // Same sources as `refresh()`: auth.json candidates first, keychain as the fallback. Only a
         // usable access token counts (see `hasUsableAccessToken`) — an API-key-only auth.json can't
         // serve the usage API, so seeding it on would just show an error row.
@@ -101,8 +97,20 @@ final class CodexProvider: ProviderRuntime {
         }
     }
 
+    /// The Codex CLI's login comes first. Only when it has no working login does a saved OpenUsage
+    /// sign-in take over for this refresh.
     func refresh() async -> ProviderSnapshot {
-        if authStore.signIn != nil { return await refreshSignedIn() }
+        authStore.signInFallback.set(false)
+        let local = await refreshLocal()
+        guard authStore.signInStore != nil, SignInFallback.localLoginMissing(local),
+              await loadOffMainActor({ [authStore] in authStore.hasSavedSignIn() })
+        else { return local }
+        AppLog.info(LogTag.auth("codex"), "no working Codex login; using the OpenUsage sign-in")
+        authStore.signInFallback.set(true)
+        return await refreshSignedIn()
+    }
+
+    private func refreshLocal() async -> ProviderSnapshot {
         if authStore.expectedIdentity != nil { return await refreshAccount() }
         let fileCandidates = authStore.loadAuthCandidates()
         var lastFallbackError: Error?
@@ -352,8 +360,8 @@ final class CodexProvider: ProviderRuntime {
         }
     }
 
-    /// A sign-in-gated card reads only its OpenUsage sign-in, so `auth.json` and the Codex Keychain item
-    /// are never read; signed out, it reports that instead of borrowing the CLI's login.
+    /// The fallback to the OpenUsage sign-in reads only that sign-in; `auth.json` and the Codex Keychain
+    /// item were already tried.
     private func refreshSignedIn() async -> ProviderSnapshot {
         let loaded: CodexAuthState?
         do {

@@ -1,6 +1,6 @@
 # Cursor
 
-Tracks your Cursor plan usage from the Cursor app's login on this Mac or an OpenUsage browser sign-in.
+Tracks your Cursor plan usage through an OpenUsage browser sign-in.
 
 ## What it tracks
 
@@ -35,15 +35,14 @@ into the Grok CLI is not required.
 
 ## Where credentials come from
 
-Cursor's Customize detail has a **Login Method**. **Local Login** (the default) reads the Cursor
-app's login on this Mac and gives Cursor a normal toggle. **OpenUsage Sign-In** uses the browser
-sign-in below instead; it can be moved to another Mac from Settings → Sign-In Transfer.
+Cursor uses only the browser sign-in below; the Cursor app's login on this Mac can't read usage
+reliably. The sign-in can be moved to another Mac from Settings → Sign-In Transfer.
 
-With OpenUsage Sign-In, open **Customize** and click **login** beside Cursor to authorize OpenUsage in your browser, using the
+Open **Customize** and click **login** beside Cursor to authorize OpenUsage in your browser, using the
 same sign-in flow as main. Finish authorization within five minutes. You can close the menu panel
 while waiting; reopen Customize to see its status or cancel. After a successful sign-in, the button
 changes to **logout**, Cursor is enabled, and its usage refreshes automatically. The Cursor detail
-continues to manage metrics; in this mode it has no Account section or separate enablement toggle.
+continues to manage metrics; it has no Account section or separate enablement toggle.
 
 The authorized account's credentials are saved in
 OpenUsage's own macOS Keychain item, separately for development and release builds. OpenUsage
@@ -53,9 +52,8 @@ If saving a renewal fails, OpenUsage keeps it in memory, shows a warning, and re
 
 Click **logout** beside Cursor to delete OpenUsage's saved authorization and turn Cursor off. A
 failed Keychain deletion keeps the account and provider on and shows an error. Logout clears the
-previous account's displayed snapshot and history cache. In OpenUsage Sign-In mode with no OpenUsage
-login, Cursor stays off, including after restarting or resetting customization; it does not use the
-Cursor app's local login.
+previous account's displayed snapshot and history cache. With no OpenUsage login, Cursor stays off,
+including after restarting or resetting customization; it does not use the Cursor app's local login.
 Browser login and logout never modify Cursor's database or Keychain items.
 
 For browser accounts, billing membership is read from `usage-summary` once an hour; it does not

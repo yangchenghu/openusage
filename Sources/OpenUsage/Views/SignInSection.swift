@@ -1,16 +1,16 @@
 import AppKit
 import SwiftUI
 
-/// The "Account" card in a provider's Customize detail: who is signed in, with the same login/logout
-/// action as the provider's row in the Customize list. Signing in turns the provider on; signing out
-/// turns it off.
+/// The "OpenUsage Sign-In" card in a provider's Customize detail: who is signed in, and sign in / sign
+/// out. The card uses this sign-in only when the tool's own login on this Mac is missing or no longer
+/// works. Signing in turns the provider on.
 struct SignInSection: View {
     let session: SignInSession
     @AppStorage(DensitySetting.key) private var density = DensitySetting.regular
 
     var body: some View {
         VStack(alignment: .leading, spacing: density.headerToCardSpacing) {
-            Text("Account")
+            Text("OpenUsage Sign-In")
                 .font(.caption.weight(.semibold))
                 .foregroundStyle(.secondary)
                 .padding(.horizontal, 8)
@@ -35,7 +35,9 @@ struct SignInSection: View {
                 Text(session.account?.label ?? "Not Signed In")
                     .lineLimit(1)
                     .truncationMode(.middle)
-                Text(session.isSignedIn ? "Signed in to OpenUsage" : "Sign in to turn this provider on.")
+                Text(session.isSignedIn
+                     ? "Used when this Mac has no working local login."
+                     : "Optional. Only needed when this Mac has no local login.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
@@ -55,7 +57,7 @@ struct SignInSection: View {
 }
 
 /// What a sign-in in flight asks of the user — the browser step (with a paste-code fallback) or a
-/// device code — plus the latest error. Shared by the Account card and the list row's popover.
+/// device code — plus the latest error. Shown in the OpenUsage Sign-In card.
 struct SignInPromptView: View {
     let session: SignInSession
     @State private var pasted = ""
@@ -150,51 +152,6 @@ struct CopyLinkButton: View {
         }
         .buttonStyle(.link)
         .controlSize(.small)
-    }
-}
-
-/// The list row's login/logout control (replacing the on/off toggle, like Cursor's): a spinner while
-/// busy, and a status button whose popover carries the sign-in prompt or the latest error.
-struct SignInAccountControl: View {
-    let session: SignInSession
-    @State private var showsPrompt = false
-
-    var body: some View {
-        HStack(spacing: 6) {
-            if session.isSigningIn || !session.isLoaded {
-                ProgressView().controlSize(.mini)
-            }
-            Button(session.isSigningIn ? "Cancel" : session.isSignedIn ? "logout" : "login") {
-                session.performPrimaryAction()
-            }
-            .buttonStyle(.bordered)
-            .controlSize(.small)
-            .disabled(!session.isLoaded)
-            if session.isSigningIn || session.errorMessage != nil {
-                Button { showsPrompt.toggle() } label: {
-                    Image(systemName: session.errorMessage == nil ? "arrow.up.right" : "exclamationmark.circle")
-                        .foregroundStyle(session.errorMessage == nil ? AnyShapeStyle(Color.secondary) : Theme.notice)
-                }
-                .buttonStyle(.plain)
-                .accessibilityLabel("Sign-In Status")
-                .popover(isPresented: $showsPrompt) {
-                    SignInPromptView(session: session)
-                        .padding(12)
-                        .frame(width: 260, alignment: .leading)
-                }
-            }
-        }
-        // Device codes and paste fields need the popover, so open it as soon as the prompt arrives;
-        // errors open it too, like Cursor's control.
-        .onChange(of: session.prompt) { _, prompt in
-            if case .deviceCode = prompt { showsPrompt = true }
-        }
-        .onChange(of: session.errorMessage) { _, message in
-            if message != nil { showsPrompt = true }
-        }
-        .onChange(of: session.isSigningIn) { _, signingIn in
-            if !signingIn, session.errorMessage == nil { showsPrompt = false }
-        }
     }
 }
 

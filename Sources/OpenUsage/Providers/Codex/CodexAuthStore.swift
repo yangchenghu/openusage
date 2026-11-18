@@ -117,12 +117,17 @@ struct CodexAuthStore: Sendable {
     /// write back. Empty for the plain card, which writes wherever it reads.
     var writableAuthHomes: Set<String>
     var piCredentialSources: [CodexPiCredentialSource]
-    /// OpenUsage's own sign-in store for this card, whichever login method is selected.
+    /// OpenUsage's own sign-in store for this card, used when the Codex CLI has no working login.
     var signInStore: (any SignedInAccountStoring)?
-    /// Whether the card currently uses that sign-in (`SignInMode.openUsage`) or the Codex CLI's login.
-    var signInMode: SignInModeReader
-    /// The sign-in while it is the selected method; then it is the only source.
-    var signIn: (any SignedInAccountStoring)? { signInMode.usesSignIn ? signInStore : nil }
+    /// Whether the provider's current refresh fell back to that sign-in (see `SignInFallback`).
+    var signInFallback: SignInFallback
+    /// The sign-in while the card falls back to it; then it is the only source.
+    var signIn: (any SignedInAccountStoring)? { signInFallback.isActive ? signInStore : nil }
+
+    /// Whether an OpenUsage sign-in is saved for this card. Blocking (Keychain on first use).
+    func hasSavedSignIn() -> Bool {
+        ((try? signInStore?.load()) ?? nil) != nil
+    }
 
     init(
         environment: EnvironmentReading = ProcessEnvironmentReader(),
@@ -134,7 +139,7 @@ struct CodexAuthStore: Sendable {
         writableAuthHomes: Set<String> = [],
         piCredentialSources: [CodexPiCredentialSource] = [],
         signIn: (any SignedInAccountStoring)? = nil,
-        signInMode: SignInModeReader = .always
+        signInFallback: SignInFallback = SignInFallback()
     ) {
         self.environment = environment
         self.files = files
@@ -145,7 +150,7 @@ struct CodexAuthStore: Sendable {
         self.writableAuthHomes = writableAuthHomes
         self.piCredentialSources = piCredentialSources
         self.signInStore = signIn
-        self.signInMode = signInMode
+        self.signInFallback = signInFallback
     }
 
     /// The OpenUsage sign-in as a credential, or `nil` when signed out. Not `scoped`: the sign-in is

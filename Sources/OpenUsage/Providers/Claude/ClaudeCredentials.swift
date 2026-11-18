@@ -130,7 +130,7 @@ struct ClaudeCredentialGeneration: Equatable, Sendable {
 struct ClaudeCredentialLoad: Sendable {
     var candidates: [ClaudeCredentialState]
     var desktopStatus: ClaudeDesktopCredentialStatus
-    /// Set for a sign-in-gated card that is signed out or whose sign-in couldn't be read. The provider
-    /// surfaces it rather than falling back to Claude Code's login.
+    /// Set while the card falls back to its sign-in and that sign-in is gone or couldn't be read. The
+    /// provider surfaces it as the refresh's error.
     var signInError: (any Error)? = nil
 }

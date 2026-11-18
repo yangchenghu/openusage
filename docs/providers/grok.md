@@ -16,14 +16,13 @@ The weekly shared pool is the limit Grok enforces for unified-billing accounts (
 
 ## Signing in inside OpenUsage
 
-By default Grok uses **Local Login**: it reads the Grok CLI's login on this Mac and has a normal toggle.
-Set **Login Method** to **OpenUsage Sign-In** in Grok's Customize detail to sign in inside OpenUsage instead
-(the sign-in can then be moved to another Mac from Settings → Sign-In Transfer). Then click **login** beside Grok in
-Customize. A device code appears beside the button and xAI's device page opens; enter the code there to approve. **Copy Link** copies the device page's address, so you can approve in any browser, even on another device. A successful sign-in turns Grok on and shows **logout**; logging out turns it off.
-While set to OpenUsage Sign-In and signed out, OpenUsage does not read the provider tool's login on this Mac at all. The tokens
-live in OpenUsage's own Keychain item and renew automatically; if the provider refuses a renewal, the
-card asks you to log in again. OpenUsage never writes to `~/.grok/auth.json`. The **Account** card in the provider's Customize detail shows
-which account is signed in.
+Grok always tries the Grok CLI's login on this Mac first. When there is none, or it no longer works, it
+uses an optional sign-in kept by OpenUsage (which can also be moved to another Mac from Settings →
+Sign-In Transfer). To add one, click **Sign In** in the **OpenUsage Sign-In** card of Grok's Customize
+detail. A device code appears and xAI's device page opens; enter the code there to approve. **Copy Link** copies the device page's address, so you can approve in any browser, even on another device. A successful sign-in turns Grok on; signing out refreshes it from the local login.
+The tokens live in OpenUsage's own Keychain item and renew automatically; if the provider refuses a
+renewal, the card asks you to sign in again. The sign-in never writes to `~/.grok/auth.json`. The card
+also shows which account is signed in.
 
 ## Where credentials come from
 

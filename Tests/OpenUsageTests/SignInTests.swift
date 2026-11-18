@@ -2,7 +2,7 @@ import os
 import XCTest
 @testable import OpenUsage
 
-/// In-memory stand-in for `SignedInAccountKeychainStore`.
+/// In-memory stand-in for `SignInVaultAccountStore`.
 final class InMemorySignInStore: SignedInAccountStoring, @unchecked Sendable {
     private let state: OSAllocatedUnfairLock<SignedInAccount?>
     init(_ account: SignedInAccount? = nil) { state = OSAllocatedUnfairLock(initialState: account) }
@@ -108,7 +108,7 @@ final class SignInSessionTests: XCTestCase {
 final class ClaudeSignInIntegrationTests: XCTestCase {
     private let now = Date(timeIntervalSince1970: 1_800_000_000)
 
-    func testSignedInAccountIsTheOnlySourceAndRenewsIntoOurStore() async throws {
+    func testSignInTakesOverWithoutAClaudeCodeLoginAndRenewsIntoOurStore() async throws {
         let keychain = CountingKeychain()
         let store = InMemorySignInStore(SignedInAccount(
             label: "me@example.com", accessToken: "expiring", refreshToken: "rt-1",
@@ -130,19 +130,15 @@ final class ClaudeSignInIntegrationTests: XCTestCase {
                 return HTTPResponse(statusCode: 404, headers: [:], body: Data())
             }
         }
-        let provider = makeProvider(store: store, keychain: keychain, http: http,
-                                    // A Claude Code login on disk that must be ignored.
-                                    files: ["/tmp/claude/.credentials.json": #"{"claudeAiOauth":{"accessToken":"cli-token"}}"#],
-                                    expectedIdentityKey: "someone-else|org")
+        let provider = makeProvider(store: store, keychain: keychain, http: http)
 
         let snapshot = await provider.refresh()
 
         XCTAssertFalse(snapshot.lines.contains(where: \.isError), "\(snapshot.lines)")
-        XCTAssertEqual(keychain.readCount, 0, "Claude Code's Keychain must not be read while signed in")
+        XCTAssertTrue(provider.authStore.signInFallback.isActive)
         XCTAssertEqual(refreshScope.withLock { $0 }, ClaudeSignIn.scopes)
         XCTAssertEqual(store.account?.accessToken, "fresh")
         XCTAssertEqual(store.account?.refreshToken, "rt-2")
-        XCTAssertFalse(http.requests.contains { $0.headers["Authorization"] == "Bearer cli-token" })
     }
 
     func testRefusedRenewalAsksToSignInAgain() async {
@@ -158,10 +154,9 @@ final class ClaudeSignInIntegrationTests: XCTestCase {
         XCTAssertEqual(ProviderSnapshotErrorText.message(snapshot), ClaudeAuthError.signInExpired.localizedDescription)
     }
 
-    func testUnreadableSignInFailsLoudlyInsteadOfFallingBack() async {
-        let keychain = CountingKeychain()
+    func testUnreadableSignInKeepsTheMissingLocalLoginError() async {
         let provider = ClaudeProvider(
-            authStore: ClaudeAuthStore(environment: FakeEnvironment(), files: FakeFiles(), keychain: keychain,
+            authStore: ClaudeAuthStore(environment: FakeEnvironment(), files: FakeFiles(), keychain: CountingKeychain(),
                                        signIn: FailingStore(), now: { [now] in now }),
             usageClient: ClaudeUsageClient(httpClient: RoutingHTTPClient { _ in
                 XCTFail("no request expected"); return HTTPResponse(statusCode: 500, headers: [:], body: Data())
@@ -170,21 +165,20 @@ final class ClaudeSignInIntegrationTests: XCTestCase {
         )
         let snapshot = await provider.refresh()
         XCTAssertTrue(snapshot.lines.allSatisfy(\.isError))
-        XCTAssertEqual(keychain.readCount, 0)
+        XCTAssertEqual(snapshot.errorCategory, .notLoggedIn)
+        XCTAssertFalse(provider.authStore.signInFallback.isActive)
     }
 
     private func makeProvider(
         store: InMemorySignInStore,
         keychain: CountingKeychain,
         http: RoutingHTTPClient,
-        files: [String: String] = [:],
-        expectedIdentityKey: String? = nil
+        files: [String: String] = [:]
     ) -> ClaudeProvider {
         ClaudeProvider(
             authStore: ClaudeAuthStore(
                 environment: FakeEnvironment(["CLAUDE_CONFIG_DIR": "/tmp/claude"]),
-                files: FakeFiles(files), keychain: keychain,
-                expectedIdentityKey: expectedIdentityKey, signIn: store, now: { [now] in now }
+                files: FakeFiles(files), keychain: keychain, signIn: store, now: { [now] in now }
             ),
             usageClient: ClaudeUsageClient(httpClient: http),
             logUsageScanner: ClaudeLogFixture.scanner(home: nil),
@@ -204,7 +198,7 @@ enum ProviderSnapshotErrorText {
 
 @MainActor
 final class GrokSignInIntegrationTests: XCTestCase {
-    func testSignedInGrokRenewsOnRejectionAndNeverReadsTheCLIFile() async {
+    func testSignInTakesOverWithoutAGrokCLILoginAndNeverWritesTheCLIFile() async {
         let now = Date(timeIntervalSince1970: 1_800_000_000)
         let store = InMemorySignInStore(SignedInAccount(
             label: "me@x.ai", accessToken: "stale", refreshToken: "rt", expiresAt: now.addingTimeInterval(3600)))
@@ -243,7 +237,7 @@ final class GrokSignInIntegrationTests: XCTestCase {
 
 @MainActor
 final class CodexSignInIntegrationTests: XCTestCase {
-    func testSignedInCodexUsesItsOwnAccountAndSkipsCLISources() async {
+    func testSignInTakesOverWithoutACodexLogin() async {
         let keychain = CountingKeychain()
         let store = InMemorySignInStore(SignedInAccount(
             label: "me@example.com", accessToken: "signed-in-token", refreshToken: "rt",
@@ -260,59 +254,63 @@ final class CodexSignInIntegrationTests: XCTestCase {
         let snapshot = await provider.refresh()
 
         XCTAssertFalse(snapshot.lines.contains(where: \.isError), "\(snapshot.lines)")
-        XCTAssertEqual(keychain.readCount, 0, "the Codex CLI's Keychain item must not be read while signed in")
+        XCTAssertTrue(provider.authStore.signInFallback.isActive)
         let usage = http.requests.first { $0.url.path.contains("usage") }
         XCTAssertEqual(usage?.headers["Authorization"], "Bearer signed-in-token")
         XCTAssertEqual(usage?.headers["ChatGPT-Account-Id"], "acct-1")
     }
 }
 
-/// Login-gated cards (like Cursor): signed out means off and "not signed in", never the CLI's login.
+/// Claude, Codex, and Grok read the tool's own login first; a saved sign-in never shadows a working one.
 @MainActor
-final class SignInGatingTests: XCTestCase {
+final class LocalLoginFirstTests: XCTestCase {
     private let cliCredentials = ["/tmp/claude/.credentials.json":
         #"{"claudeAiOauth":{"accessToken":"cli-token","expiresAt":4102444800000,"scopes":["user:profile"]}}"#]
 
-    func testSignedOutClaudeReportsNotSignedInAndIgnoresClaudeCode() async {
-        let keychain = CountingKeychain()
+    func testClaudeCodeLoginWinsOverTheSavedSignIn() async {
+        let store = InMemorySignInStore(SignedInAccount(label: "me", accessToken: "signed-in-token"))
+        let http = RoutingHTTPClient { request in
+            XCTAssertEqual(request.headers["Authorization"], "Bearer cli-token")
+            return request.url.path == "/api/oauth/usage"
+                ? HTTPResponse(statusCode: 200, headers: [:], body: Data(
+                    #"{"five_hour":{"utilization":42,"resets_at":"2099-01-01T00:00:00.000Z"}}"#.utf8))
+                : HTTPResponse(statusCode: 404, headers: [:], body: Data())
+        }
         let provider = ClaudeProvider(
             authStore: ClaudeAuthStore(environment: FakeEnvironment(["CLAUDE_CONFIG_DIR": "/tmp/claude"]),
-                                       files: FakeFiles(cliCredentials), keychain: keychain, signIn: InMemorySignInStore()),
-            usageClient: ClaudeUsageClient(httpClient: RoutingHTTPClient { _ in
-                XCTFail("no request while signed out"); return HTTPResponse(statusCode: 500, headers: [:], body: Data())
-            }),
+                                       files: FakeFiles(cliCredentials), keychain: CountingKeychain(), signIn: store),
+            usageClient: ClaudeUsageClient(httpClient: http),
             logUsageScanner: ClaudeLogFixture.scanner(home: nil), pricing: { TestPricing.bundled }
         )
-        XCTAssertTrue(provider.requiresOpenUsageSignIn)
-        let hasCredentials = await provider.hasLocalCredentials()
-        XCTAssertFalse(hasCredentials, "Claude Code's login must not count as detected")
+        XCTAssertFalse(provider.requiresOpenUsageSignIn)
+
         let snapshot = await provider.refresh()
-        XCTAssertEqual(ProviderSnapshotErrorText.message(snapshot), ClaudeAuthError.notSignedIn.localizedDescription)
-        XCTAssertEqual(snapshot.errorCategory, .notLoggedIn)
-        XCTAssertEqual(keychain.readCount, 0)
+
+        XCTAssertFalse(snapshot.lines.contains(where: \.isError), "\(snapshot.lines)")
+        XCTAssertFalse(provider.authStore.signInFallback.isActive)
+        XCTAssertEqual(store.account?.accessToken, "signed-in-token")
     }
 
-    func testSignedOutCodexAndGrokReportNotSignedIn() async {
+    func testWithoutAnyLoginCodexAsksForTheCLILoginAndGrokStillDetectsItsCLI() async {
         let codex = CodexProvider(
             authStore: CodexAuthStore(environment: FakeEnvironment(), files: FakeFiles(), keychain: CountingKeychain(),
                                       signIn: InMemorySignInStore()),
             usageClient: CodexUsageClient(http: RoutingHTTPClient { _ in
-                XCTFail("no request while signed out"); return HTTPResponse(statusCode: 500, headers: [:], body: Data())
+                XCTFail("no request without a login"); return HTTPResponse(statusCode: 500, headers: [:], body: Data())
             })
         )
         let codexSnapshot = await codex.refresh()
-        XCTAssertEqual(ProviderSnapshotErrorText.message(codexSnapshot), CodexAuthError.notSignedIn.localizedDescription)
+        XCTAssertEqual(ProviderSnapshotErrorText.message(codexSnapshot), CodexAuthError.notLoggedIn.localizedDescription)
 
         let grokFiles = FakeFiles(["~/.grok/auth.json": #"{"cli":{"key":"grok-cli-token"}}"#])
         let grok = GrokProvider(authStore: GrokAuthStore(files: grokFiles), signIn: InMemorySignInStore())
+        XCTAssertFalse(grok.requiresOpenUsageSignIn)
         let grokDetected = await grok.hasLocalCredentials()
-        XCTAssertFalse(grokDetected)
-        let grokSnapshot = await grok.refresh()
-        XCTAssertEqual(ProviderSnapshotErrorText.message(grokSnapshot), GrokAuthError.notSignedIn.localizedDescription)
+        XCTAssertTrue(grokDetected, "the Grok CLI's login counts as detected")
     }
 
-    func testResetAllNeverTurnsOnLoginGatedProviders() async throws {
-        let suite = "SignInGating.\(UUID().uuidString)"
+    func testResetAllDetectsLocalLoginsOnSignInCards() async throws {
+        let suite = "LocalLoginFirst.\(UUID().uuidString)"
         let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))
         defer { defaults.removePersistentDomain(forName: suite) }
         let enablement = ProviderEnablementStore(defaults: defaults)
@@ -324,7 +322,7 @@ final class SignInGatingTests: XCTestCase {
 
         await FirstRunSeeder.reseed(providers: [claude, codex], enablement: enablement).value
 
-        XCTAssertFalse(enablement.isEnabled("claude"))
+        XCTAssertTrue(enablement.isEnabled("claude"))
         XCTAssertFalse(enablement.isEnabled("codex"))
     }
 }

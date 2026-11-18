@@ -16,13 +16,13 @@ final class GrokProvider: ProviderRuntime {
     let logUsageScanner: GrokLogUsageScanner
     let now: @Sendable () -> Date
     let pricing: @Sendable () async -> ModelPricing
-    /// OpenUsage's own sign-in store, whichever login method is selected.
+    /// OpenUsage's own sign-in store, used when the Grok CLI has no working login.
     let signInStore: (any SignedInAccountStoring)?
-    /// Whether Grok currently uses that sign-in (`SignInMode.openUsage`) or the Grok CLI's login.
-    let signInMode: SignInModeReader
-    /// The sign-in while it is the selected method. Then it is the only source: `~/.grok/auth.json`
-    /// is neither read nor rewritten.
-    var signIn: (any SignedInAccountStoring)? { signInMode.usesSignIn ? signInStore : nil }
+    /// Whether the current refresh fell back to that sign-in (see `SignInFallback`).
+    let signInFallback: SignInFallback
+    /// The sign-in while Grok falls back to it. Then it is the only source: `~/.grok/auth.json` is
+    /// neither read again nor rewritten.
+    var signIn: (any SignedInAccountStoring)? { signInFallback.isActive ? signInStore : nil }
 
     init(
         authStore: GrokAuthStore = GrokAuthStore(),
@@ -31,10 +31,10 @@ final class GrokProvider: ProviderRuntime {
         now: @escaping @Sendable () -> Date = Date.init,
         pricing: @escaping @Sendable () async -> ModelPricing = { await ModelPricingStore.shared.current() },
         signIn: (any SignedInAccountStoring)? = nil,
-        signInMode: SignInModeReader = .always
+        signInFallback: SignInFallback = SignInFallback()
     ) {
         self.signInStore = signIn
-        self.signInMode = signInMode
+        self.signInFallback = signInFallback
         self.authStore = authStore
         self.usageClient = usageClient
         self.logUsageScanner = logUsageScanner
@@ -57,24 +57,29 @@ final class GrokProvider: ProviderRuntime {
         ] + WidgetDescriptor.spendTiles(provider: provider)
     }
 
-    var requiresOpenUsageSignIn: Bool { signIn != nil }
-
     func hasLocalCredentials() async -> Bool {
-        // Detected only by the OpenUsage sign-in, never by the Grok CLI's login.
-        if signIn != nil { return await loadSignedInAccount() != nil }
+        // A saved OpenUsage sign-in counts as a login too.
+        if await loadSavedSignIn() != nil { return true }
         // Same source as `refresh()`: ~/.grok/auth.json with at least one keyed entry.
         return await loadOffMainActor { [authStore] in
             ((try? authStore.loadAuthCandidates()) ?? []).isEmpty == false
         }
     }
 
+    /// The Grok CLI's login comes first. Only when it has no working login does a saved OpenUsage
+    /// sign-in take over for this refresh.
     func refresh() async -> ProviderSnapshot {
-        if signIn != nil { return await refreshSignedIn() }
+        signInFallback.set(false)
+        let local: ProviderSnapshot
         do {
-            return try await loadAndProbe()
+            local = try await loadAndProbe()
         } catch {
-            return ProviderSnapshot.error(provider: provider, error: error)
+            local = ProviderSnapshot.error(provider: provider, error: error)
         }
+        guard SignInFallback.localLoginMissing(local), await loadSavedSignIn() != nil else { return local }
+        AppLog.info(LogTag.auth("grok"), "no working Grok CLI login; using the OpenUsage sign-in")
+        signInFallback.set(true)
+        return await refreshSignedIn()
     }
 
     private func loadAndProbe() async throws -> ProviderSnapshot {

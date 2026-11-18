@@ -21,20 +21,20 @@ This check happens **once per provider**. After that, the provider is yours to m
 
 ## Your choices always stick
 
-Claude, Codex, Cursor, and Grok each have a **Login Method** in their Customize detail:
+**Claude, Codex, and Grok** read the login the tool already has on this Mac first (Claude Code, the
+Codex CLI, the Grok CLI). Their Customize detail also has an optional **OpenUsage Sign-In**, a sign-in
+kept by OpenUsage itself, used only when the local login is missing or no longer works. They keep
+their normal on/off toggle and are detected like any other provider; a saved OpenUsage sign-in counts
+as a login too. Signing in turns the provider on; signing out just refreshes it, so it goes back to
+the local login if there is one. (With several Claude or Codex cards, only the default card has the
+sign-in.)
 
-- **Local Login** (the default) reads the login the tool already has on this Mac (Claude Code, the
-  Codex CLI, the Cursor app, the Grok CLI). The provider keeps its normal on/off toggle and is
-  detected like any other provider.
-- **OpenUsage Sign-In** uses a sign-in kept by OpenUsage itself. Login/logout replaces the toggle: a
-  successful login turns the provider on and refreshes it, logout turns it off, and each launch sets
-  it from the saved sign-in. The tool's own login on this Mac is not read, and Reset All never turns
-  it on. (With several Claude or Codex cards, only the default card offers this.)
+**Cursor** uses only its OpenUsage sign-in, because the Cursor app's login can't read usage reliably.
+Login/logout replaces its toggle: a successful login turns it on and refreshes it, logout turns it
+off, and each launch sets it from the saved sign-in. Reset All never turns it on.
 
-Switching the method drops the cached usage and turns the provider on only if the new method has a
-login to use. On the first launch with login methods, a provider that already has an OpenUsage
-sign-in keeps using it; the others switch to Local Login. OpenUsage sign-ins can be moved to another
-Mac from Settings → Sign-In Transfer.
+OpenUsage keeps all of its own sign-ins in one Keychain item, so a launch reads it once. OpenUsage
+sign-ins can be moved to another Mac from Settings → Sign-In Transfer.
 
 Everything you set in Customize — providers on or off, metric layout, menu-bar stars — carries across updates untouched. The only thing an update may ever change is turning **on** a provider you have never seen before, and only when you actually have that tool installed.
 

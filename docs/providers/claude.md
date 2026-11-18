@@ -52,14 +52,14 @@ also use a reset with `/rate-limit-options` in Claude Code.
 
 ## Signing in inside OpenUsage
 
-By default Claude uses **Local Login**: it reads Claude Code's login on this Mac and has a normal toggle.
-Set **Login Method** to **OpenUsage Sign-In** in Claude's Customize detail to sign in inside OpenUsage instead
-(the sign-in can then be moved to another Mac from Settings → Sign-In Transfer). Then click **login** beside Claude in
-Customize. Your browser opens Claude's sign-in page; approve it and OpenUsage picks the result up automatically. If the page shows a code instead, open the status icon beside the button and paste it there. **Copy Link** copies the sign-in page's address to open in another browser; from a browser on another device, paste the address it lands on (`localhost/callback?code=…`) back into the code field. A successful sign-in turns Claude on and shows **logout**; logging out turns it off.
-While set to OpenUsage Sign-In and signed out, OpenUsage does not read the provider tool's login on this Mac at all. The tokens
-live in OpenUsage's own Keychain item and renew automatically; if the provider refuses a renewal, the
-card asks you to log in again. The account can differ from Claude Code's. With several Claude cards, only the default card is login-gated; the others keep reading their own logins. The **Account** card in the provider's Customize detail shows
-which account is signed in.
+Claude always tries Claude Code's (or Claude Desktop's) login on this Mac first. When there is none, or
+it no longer works, it uses an optional sign-in kept by OpenUsage (which can also be moved to another
+Mac from Settings → Sign-In Transfer). To add one, click **Sign In** in the **OpenUsage Sign-In** card of
+Claude's Customize detail. Your browser opens Claude's sign-in page; approve it and OpenUsage picks the result up automatically. If the page shows a code instead, paste it in the field that appears. **Copy Link** copies the sign-in page's address to open in another browser; from a browser on another device, paste the address it lands on (`localhost/callback?code=…`) back into the code field. A successful sign-in turns Claude on; signing out refreshes it from the local login.
+The tokens live in OpenUsage's own Keychain item and renew automatically; if the provider refuses a
+renewal, the card asks you to sign in again. The account can differ from Claude Code's. With several
+Claude cards, only the default card has the sign-in; the others read their own logins. The card also
+shows which account is signed in.
 
 ## Where credentials come from
 
@@ -89,6 +89,12 @@ short-lived token expires, open Claude Desktop so it can renew the login, then r
 OpenUsage reads and saves Claude Code's Keychain login the same way Claude Code does, through macOS's
 `security` tool. That read doesn't ask for access, and Claude Code keeps working after OpenUsage saves a
 renewed login.
+
+When Claude Code runs with its own `CLAUDE_CONFIG_DIR` set only for the `claude` process (for example
+through cac), OpenUsage started from Finder or at login can't see that variable. If the default
+`~/.claude` has no login, OpenUsage looks for Claude Code's login under the directory it last saw in
+the environment, then cac's active environment (`~/.cac/current`), then the other cac environments,
+and remembers the one it finds. This check reads only Keychain item names, so it never asks for access.
 
 A `CLAUDE_CODE_OAUTH_TOKEN` — usually a long-lived `claude setup-token` — can run the model but can't read your Session and Weekly limits, and it often lingers in your shell environment. So when a real keychain or file login is present, OpenUsage uses that login for the live meters and keeps the environment token only as a fallback; the Session/Weekly meters no longer go blank just because that token is set. If the environment token is your *only* credential (a headless setup), it's used on its own and the spend tiles still load from local logs.
 

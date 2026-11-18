@@ -41,9 +41,9 @@ protocol ProviderRuntime: AnyObject {
     /// Defaults to the shared `RefreshSetting.interval`; fast-moving sources (market prices) shorten it.
     var refreshInterval: TimeInterval { get }
 
-    /// Whether this provider is currently turned on by signing in inside OpenUsage (login/logout replaces
-    /// its toggle) rather than by detecting a tool's login on this Mac — the login-gated cards' "OpenUsage
-    /// Sign-In" method. Such providers are never switched on by detection or Reset All.
+    /// Whether this provider is turned on only by signing in inside OpenUsage (login/logout replaces its
+    /// toggle) rather than by detecting a tool's login on this Mac — Cursor. Such providers are never
+    /// switched on by detection or Reset All.
     var requiresOpenUsageSignIn: Bool { get }
 
     /// Hands the provider the snapshot painted from the launch cache, called once at launch and only

@@ -26,8 +26,9 @@ extension AppContainer {
         return data
     }
 
-    /// Opens an export and saves each sign-in as its card's OpenUsage sign-in, switching those cards to
-    /// OpenUsage Sign-In and turning them on. Returns the imported providers' display names.
+    /// Opens an export and saves each sign-in as its card's OpenUsage sign-in and turns those cards on.
+    /// Claude, Codex, and Grok still prefer a local login on this Mac when one works. Returns the
+    /// imported providers' display names.
     @discardableResult
     func importSignIns(_ data: Data, password: String) async throws -> [String] {
         let payload = try await Task.detached { try SignInTransferFile.open(data, password: password) }.value
@@ -43,7 +44,6 @@ extension AppContainer {
         }
         guard !importedIDs.isEmpty else { throw SignInTransferError.nothingToImport }
         for id in importedIDs {
-            signInModes.set(.openUsage, for: id)
             dataStore.providerAccountDidChange(id)
             enablement.setEnabled(true, for: id)
         }

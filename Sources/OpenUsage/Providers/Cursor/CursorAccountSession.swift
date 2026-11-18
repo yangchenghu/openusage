@@ -22,7 +22,7 @@ final class CursorAccountSession {
     let vault: any CursorAccountVault
     let login: CursorLogin
 
-    init(vault: any CursorAccountVault = CursorKeychainVault(), login: CursorLogin = CursorLogin()) {
+    init(vault: any CursorAccountVault = CursorSignInVault(vault: .shared), login: CursorLogin = CursorLogin()) {
         self.vault = vault
         self.login = login
     }

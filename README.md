@@ -20,12 +20,10 @@ OpenUsage shows how much of your AI coding plans you've used: session and weekly
 
 ## 登录方式
 
-Claude、Codex、Cursor、Grok 可在各自的 **Customize** 详情中选择 **Login Method**：
+- **Claude、Codex、Grok**：优先读取本机工具已有的登录（Claude Code、Codex CLI、Grok CLI），使用普通开关。本机没有可用登录时，才使用 Customize 详情里 **OpenUsage Sign-In** 卡片保存的登录（可选）。
+- **Cursor**：只使用 OpenUsage 自己的登录。Customize 列表右侧的开关变成 **login / logout**；logout 删除登录并关闭 Cursor。授权过期时，先 logout 再 login 即可。
 
-- **Local Login**（默认）：读取本机工具已有的登录（Claude Code、Codex CLI、Cursor 应用、Grok CLI），使用普通开关。
-- **OpenUsage Sign-In**：Customize 列表右侧的开关变成 **login / logout**。点击 login 后在浏览器或设备码页面完成授权，应用会自动保存登录并刷新用量；logout 删除登录并关闭该厂商。授权过期时，先 logout 再 login 即可。
-
-OpenUsage Sign-In 的登录可以通过 **Settings → Sign-In Transfer** 加密导出，再导入到另一台 Mac。同一份登录不要在两台 Mac 上同时使用，否则续期后其中一台可能被登出。更多说明见[厂商启用与登录](docs/provider-enablement.md)和 [Sign-In Transfer](docs/settings.md#sign-in-transfer)。
+OpenUsage 自己的所有登录合并保存在一个 Keychain 项里，启动时只读取一次。这些登录可以通过 **Settings → Sign-In Transfer** 加密导出，再导入到另一台 Mac。同一份登录不要在两台 Mac 上同时使用，否则续期后其中一台可能被登出。更多说明见[厂商启用与登录](docs/provider-enablement.md)和 [Sign-In Transfer](docs/settings.md#sign-in-transfer)。
 
 <p align="center">
   <img src="assets/screenshot.jpg?v=20260706" alt="OpenUsage menu bar tracker showing Claude and Codex session, weekly, and spend usage" width="900">

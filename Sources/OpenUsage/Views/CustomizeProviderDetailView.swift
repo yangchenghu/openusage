@@ -33,10 +33,7 @@ struct CustomizeProviderDetailView: View {
                 if let keyProvider = container.apiKeyProviders.first(where: { $0.provider.id == providerID }) {
                     APIKeysSection(provider: keyProvider)
                 }
-                if container.supportsLoginMethod(providerID) {
-                    LoginMethodSection(providerID: providerID)
-                }
-                if container.usesOpenUsageSignIn(providerID), let signIn = container.signInSessions[providerID] {
+                if let signIn = container.signInSessions[providerID] {
                     SignInSection(session: signIn)
                 }
                 if let crypto = container.providers.first(where: { $0.provider.id == providerID }) as? CryptoPriceProvider {

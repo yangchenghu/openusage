@@ -4,6 +4,13 @@
 
 以下为本地维护改动。当前开发包与本机安装的版本号为 **0.7.18**（面板底部 `OpenUsage 0.7.18`）。`dist/OpenUsage-0.7.17.dmg` 仍是上一包。未推送 tag，也不会进入上游 Sparkle。
 
+## 2026-11-17 — Keychain 只读一次，本机登录优先
+
+- OpenUsage 自己的登录（Claude、Codex、Grok、Cursor）合并到一个 Keychain 项（`<bundle id>.signin`，账户 `all`），启动只读一次，之后走内存缓存。首次启动会把旧的 4 个项迁移进来并删除；迁移这一次旧项可能还会各弹一次密码框。
+- 移除 **Login Method** 切换。Claude、Codex、Grok 先读本机工具的登录，没有可用登录时才使用 OpenUsage 自己的登录。Customize 详情里的 **OpenUsage Sign-In** 卡片变为可选，这三家始终保留普通开关。
+- Cursor 只使用 OpenUsage 登录，login / logout 替换开关，不再读取 Cursor 应用的本机登录。
+- 修复：用 cac 等工具只给 `claude` 进程设置 `CLAUDE_CONFIG_DIR` 时，从 Finder 或开机启动的 OpenUsage 找不到 Claude Code 的登录（Keychain 项为 `Claude Code-credentials-<目录哈希>`），重启后提示未登录。现在默认 `~/.claude` 没有登录时，依次检查上次记住的目录、cac 当前环境（`~/.cac/current`）和其他 cac 环境，找到后记住。这个检查只读 Keychain 项名称，不会弹框。
+
 ## 2026-11-17 — 版本号改为 0.7.18
 
 - 开发包不再写死 `0.7.0-dev`。面板底部、关于窗口和启动日志显示 `0.7.18`，用来区分这次本地维护包和之前的 `0.7.0-dev` / `0.7.17`。

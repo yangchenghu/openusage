@@ -133,7 +133,8 @@ final class ShellEnvironmentSnapshotTests: XCTestCase {
         let reader = ProcessEnvironmentReader(
             processEnvironment: [:],
             shellEnvironment: cold,
-            launchSnapshot: { snapshot }
+            launchSnapshot: { snapshot },
+            claudeConfigDirFallback: { nil }
         )
 
         XCTAssertEqual(reader.value(for: "CODEX_HOME"), "/tmp/persisted")

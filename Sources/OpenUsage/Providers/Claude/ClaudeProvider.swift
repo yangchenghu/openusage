@@ -105,13 +105,11 @@ final class ClaudeProvider: ProviderRuntime {
         pendingLaunchSnapshot = snapshot
     }
 
-    var requiresOpenUsageSignIn: Bool { authStore.signIn != nil }
-
     func hasLocalCredentials() async -> Bool {
-        // A sign-in-gated card is "detected" only by its OpenUsage sign-in, never by Claude Code's login.
-        if let signIn = authStore.signIn {
-            return await loadOffMainActor { (try? signIn.load()) ?? nil } != nil
-        }
+        // A saved OpenUsage sign-in counts as a login too. Without one the card can't be falling back to
+        // it, so detection below reads Claude Code's login.
+        if await loadOffMainActor({ [authStore] in authStore.hasSavedSignIn() }) { return true }
+        authStore.signInFallback.set(false)
         // Never trigger another app's Keychain prompt during first-run detection. Encrypted Desktop
         // material still counts as a local login; the first manual refresh requests access if needed.
         let load = await loadOffMainActor { [authStore] in authStore.loadCredentialSet() }
@@ -119,8 +117,21 @@ final class ClaudeProvider: ProviderRuntime {
         return load.desktopStatus == .permissionRequired || load.desktopStatus == .stale
     }
 
+    /// Claude Code's login comes first. Only when it has no working login does a saved OpenUsage sign-in
+    /// take over for this refresh.
     func refresh() async -> ProviderSnapshot {
-        await refresh(
+        authStore.signInFallback.set(false)
+        let local = await refresh(
+            credentialReloadsRemaining: 1,
+            forceDesktopFallback: false,
+            previousFallbackError: nil
+        )
+        guard authStore.signInStore != nil, SignInFallback.localLoginMissing(local),
+              await loadOffMainActor({ [authStore] in authStore.hasSavedSignIn() })
+        else { return local }
+        AppLog.info(LogTag.auth("claude"), "no working Claude Code login; using the OpenUsage sign-in")
+        authStore.signInFallback.set(true)
+        return await refresh(
             credentialReloadsRemaining: 1,
             forceDesktopFallback: false,
             previousFallbackError: nil
@@ -190,6 +201,12 @@ final class ClaudeProvider: ProviderRuntime {
             }
             AppLog.info(LogTag.auth("claude"), "no access token, not logged in")
             let error = ClaudeAuthError.notLoggedIn
+            // Report the missing login so `refresh()` can fall back to the saved sign-in, instead of
+            // a local-history-only snapshot.
+            if authStore.signInStore != nil, !authStore.signInFallback.isActive,
+               await loadOffMainActor({ [authStore] in authStore.hasSavedSignIn() }) {
+                return ProviderSnapshot.error(provider: provider, error: error)
+            }
             let snapshot = await snapshotWithLocalUsage(
                 mapped: ClaudeMappedUsage(plan: nil, lines: []),
                 warning: error.localizedDescription

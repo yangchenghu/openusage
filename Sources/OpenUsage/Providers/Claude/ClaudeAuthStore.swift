@@ -85,13 +85,18 @@ struct ClaudeAuthStore: Sendable {
     let desktopOnly: Bool
     let swapAccount: ClaudeSwapAccount?
     let preferOrganizationScopedDesktop: Bool
-    /// OpenUsage's own sign-in store for this card, whichever login method is selected.
+    /// OpenUsage's own sign-in store for this card, used when Claude Code has no working login.
     let signInStore: (any SignedInAccountStoring)?
-    /// Whether the card currently uses that sign-in (`SignInMode.openUsage`) or Claude Code's login.
-    let signInMode: SignInModeReader
-    /// The sign-in while it is the selected method. Then it is the only source: Claude Code's Keychain,
-    /// its credentials file, and Claude Desktop are never read (no prompts).
-    var signIn: (any SignedInAccountStoring)? { signInMode.usesSignIn ? signInStore : nil }
+    /// Whether the provider's current refresh fell back to that sign-in (see `SignInFallback`).
+    let signInFallback: SignInFallback
+    /// The sign-in while the card falls back to it. Then it is the only source: Claude Code's Keychain,
+    /// its credentials file, and Claude Desktop are not read again.
+    var signIn: (any SignedInAccountStoring)? { signInFallback.isActive ? signInStore : nil }
+
+    /// Whether an OpenUsage sign-in is saved for this card. Blocking (Keychain on first use).
+    func hasSavedSignIn() -> Bool {
+        ((try? signInStore?.load()) ?? nil) != nil
+    }
 
     init(
         environment: EnvironmentReading = ProcessEnvironmentReader(),
@@ -104,7 +109,7 @@ struct ClaudeAuthStore: Sendable {
         swapAccount: ClaudeSwapAccount? = nil,
         preferOrganizationScopedDesktop: Bool = false,
         signIn: (any SignedInAccountStoring)? = nil,
-        signInMode: SignInModeReader = .always,
+        signInFallback: SignInFallback = SignInFallback(),
         now: @escaping @Sendable () -> Date = Date.init
     ) {
         self.environment = environment
@@ -117,7 +122,7 @@ struct ClaudeAuthStore: Sendable {
         self.swapAccount = swapAccount
         self.preferOrganizationScopedDesktop = preferOrganizationScopedDesktop
         self.signInStore = signIn
-        self.signInMode = signInMode
+        self.signInFallback = signInFallback
         self.now = now
     }
 
@@ -131,8 +136,8 @@ struct ClaudeAuthStore: Sendable {
         forceDesktopFallback: Bool = false
     ) -> ClaudeCredentialLoad {
         if let signIn {
-            // The sign-in is this card's only source; without one it is signed out, not "use Claude
-            // Code's login". `.notFound` keeps the provider from retrying through Claude Desktop.
+            // While the card falls back to its sign-in, it is the only source. `.notFound` keeps the
+            // provider from retrying through Claude Desktop.
             do {
                 guard let account = try signIn.load() else {
                     return ClaudeCredentialLoad(candidates: [], desktopStatus: .notFound, signInError: ClaudeAuthError.notSignedIn)
@@ -502,7 +507,12 @@ struct ClaudeAuthStore: Sendable {
     }
 
     private func hashSuffix(_ value: String) -> String {
-        let normalized = value.precomposedStringWithCanonicalMapping
+        Self.configDirHash(value)
+    }
+
+    /// The suffix Claude Code adds to its Keychain service for a non-default config directory.
+    static func configDirHash(_ directory: String) -> String {
+        let normalized = directory.precomposedStringWithCanonicalMapping
         let digest = SHA256.hash(data: Data(normalized.utf8))
         return String(digest.map { String(format: "%02x", $0) }.joined().prefix(8))
     }
