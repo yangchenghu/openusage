@@ -267,6 +267,16 @@ extension AntigravityError: CategorizedError {
     }
 }
 
+extension DollarIndexError: CategorizedError {
+    var errorCategory: ErrorCategory {
+        switch self {
+        case .connectionFailed: .network
+        case .invalidResponse, .apiError: .decoding
+        case .requestFailed(let status): ErrorCategory.http(status)
+        }
+    }
+}
+
 extension CryptoPriceError: CategorizedError {
     var errorCategory: ErrorCategory {
         switch self {

@@ -100,6 +100,7 @@ enum ProviderMarks {
         case "codex": return "circle.hexagongrid"
         case "crypto": return "chart.line.uptrend.xyaxis"
         case "cursor": return "cube"
+        case "dxy": return "dollarsign.circle"
         case "grok": return "bolt.fill"
         case "ollama": return "cloud"
         case "opencode": return "chevron.left.forwardslash.chevron.right"

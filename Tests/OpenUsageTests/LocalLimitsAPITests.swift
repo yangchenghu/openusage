@@ -246,6 +246,7 @@ final class LocalLimitsAPITests: XCTestCase {
             "copilot": ["premiumCredits", "extraUsage", "orgCredits", "orgSpend", "chat", "completions"],
             // Market prices are not usage limits, so Crypto Prices exports no limit resources.
             "crypto": [],
+            "dxy": [],
             "devin": ["daily", "weekly", "extraUsageBalance"],
             "grok": ["weekly"],
             "ollama": ["session", "weekly", "monthly", "purchasedCredits"],

@@ -50,6 +50,8 @@ enum DefaultLayout {
         "openrouter.credits", "openrouter.balance",
         "openrouter.today", "openrouter.week", "openrouter.month", "openrouter.keyLimit",
 
+        "dxy.price", "dxy.range",
+
         "zai.session", "zai.weekly", "zai.webSearches"
     ]
 
@@ -123,6 +125,8 @@ enum DefaultLayout {
         // OpenRouter: Credits meter + Balance stay above the fold; period spend and the per-key cap
         // sit below the caret.
         "openrouter.today", "openrouter.week", "openrouter.month", "openrouter.keyLimit",
+        // US Dollar Index: the price stays above the fold; the day range sits below the caret.
+        "dxy.range",
         // Z.ai: Session meter stays above the fold; Web Searches (monthly count) sits below the caret.
         "zai.webSearches"
     ]
